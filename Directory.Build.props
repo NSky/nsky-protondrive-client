@@ -1,0 +1,18 @@
+<Project>
+
+  <PropertyGroup>
+    <!-- Location of the Proton Drive SDK checkout (https://github.com/ProtonDriveApps/sdk). -->
+    <ProtonSdkRoot Condition="'$(ProtonSdkRoot)' == ''">$(MSBuildThisFileDirectory)../sdk/</ProtonSdkRoot>
+
+    <TargetFramework>net10.0</TargetFramework>
+    <LangVersion>latest</LangVersion>
+    <Nullable>enable</Nullable>
+    <ImplicitUsings>enable</ImplicitUsings>
+    <Deterministic>true</Deterministic>
+
+    <Version>0.1.0</Version>
+    <Authors>nsky</Authors>
+    <Product>nsky-protondrive-client</Product>
+  </PropertyGroup>
+
+</Project>

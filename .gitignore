@@ -424,3 +424,10 @@ FodyWeavers.xsd
 
 # Official VS Code C# Dev Kit Extension exclusion
 #*.lscache
+
+# nsky-protondrive-client
+[Bb]in/
+[Oo]bj/
+
+# graft's local graph cache — regenerable, not committed (run `graft build`).
+/graft/

@@ -1,0 +1,7 @@
+# Applied to every `dotnet build/restore/run` started from this repository.
+# The SDK can target either the Go- or Rust-backed Proton.Cryptography package;
+# the currently published source (ProtonDriveApps/dotnet-crypto) is Rust-backed.
+-p:CryptoBackend=rust
+# Use this repository's nuget.config for the referenced SDK projects too (the SDK's own
+# nuget.config maps Proton.* packages to a feed that is not publicly available).
+-p:RestoreConfigFile=%MSBUILDTHISFILEDIRECTORY%nuget.config

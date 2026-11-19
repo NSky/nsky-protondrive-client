@@ -1,0 +1,15 @@
+<Project Sdk="Microsoft.NET.Sdk">
+
+  <PropertyGroup>
+    <OutputType>Exe</OutputType>
+    <AssemblyName>protondrive</AssemblyName>
+    <RootNamespace>NskyProtonDrive.Cli</RootNamespace>
+    <InvariantGlobalization>true</InvariantGlobalization>
+  </PropertyGroup>
+
+  <ItemGroup>
+    <ProjectReference Include="$(ProtonSdkRoot)incubating/account/cs/src/Proton.Drive.Sdk.Account/Proton.Drive.Sdk.Account.csproj" />
+    <ProjectReference Include="$(ProtonSdkRoot)client/cs/src/Proton.Drive.Sdk/Proton.Drive.Sdk.csproj" />
+  </ItemGroup>
+
+</Project>
