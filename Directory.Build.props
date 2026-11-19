@@ -11,7 +11,7 @@
     <Deterministic>true</Deterministic>
 
     <Version>0.1.0</Version>
-    <Authors>nsky</Authors>
+    <Authors>NSky Labs</Authors>
     <Product>nsky-protondrive-client</Product>
   </PropertyGroup>
 

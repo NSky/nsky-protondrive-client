@@ -1,3 +1,4 @@
+using NskyProtonDrive.Cli.Diagnostics;
 using NskyProtonDrive.Cli.Terminal;
 using Proton.Drive.Sdk.Account;
 using Proton.Drive.Sdk.Account.Authentication;
@@ -28,7 +29,12 @@ internal sealed class AuthService(SessionStore store)
         try
         {
             var cache = new PassphraseCapturingCacheRepository();
-            var options = new ProtonSessionOptions { CacheRepository = cache, UserAgent = AppInfo.UserAgent };
+            var options = new ProtonSessionOptions
+            {
+                CacheRepository = cache,
+                UserAgent = AppInfo.UserAgent,
+                CustomHttpMessageHandlerFactory = HttpTraceHandler.FactoryIfEnabled,
+            };
 
             var session = await ProtonApiSession.BeginAsync(username, password, AppInfo.ProtonAppVersion, options, cancellationToken)
                 .ConfigureAwait(false);
@@ -91,7 +97,11 @@ internal sealed class AuthService(SessionStore store)
     {
         var stored = store.Load() ?? throw new NotLoggedInException();
 
-        var options = new ProtonClientOptions { UserAgent = AppInfo.UserAgent };
+        var options = new ProtonClientOptions
+        {
+            UserAgent = AppInfo.UserAgent,
+            CustomHttpMessageHandlerFactory = HttpTraceHandler.FactoryIfEnabled,
+        };
 
         var session = ProtonApiSession.Resume(
             (SessionId)stored.SessionId,

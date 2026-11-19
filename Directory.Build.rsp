@@ -5,3 +5,6 @@
 # Use this repository's nuget.config for the referenced SDK projects too (the SDK's own
 # nuget.config maps Proton.* packages to a feed that is not publicly available).
 -p:RestoreConfigFile=%MSBUILDTHISFILEDIRECTORY%nuget.config
+# The SDK projects ask for Proton.Cryptography >= 0.32.1 during the implicit restore of `dotnet build`
+# (the CryptoBackend property does not reach that evaluation) and get 0.40.1, which is what we want.
+-nowarn:NU1603

@@ -1,5 +1,6 @@
 using NskyProtonDrive.Cli;
 using NskyProtonDrive.Cli.Auth;
+using NskyProtonDrive.Cli.Drive;
 using Proton.Sdk.Api;
 
 using var cts = new CancellationTokenSource();
@@ -55,6 +56,13 @@ try
             return 0;
         }
 
+        case "ls":
+        case "list":
+        {
+            var context = await auth.ResumeAsync(cts.Token);
+            return await ListCommand.RunAsync(context, args.Length > 1 ? args[1] : null, cts.Token);
+        }
+
         case "version":
         case "--version":
             Console.WriteLine($"{AppInfo.CommandName} {AppInfo.Version} ({AppInfo.ProtonAppVersion})");
@@ -73,6 +81,11 @@ try
     }
 }
 catch (NotLoggedInException ex)
+{
+    Console.Error.WriteLine(ex.Message);
+    return 1;
+}
+catch (RemotePathNotFoundException ex)
 {
     Console.Error.WriteLine(ex.Message);
     return 1;
@@ -135,6 +148,7 @@ static void PrintHelp()
           login [-u|--username <name>]  Sign in (password, 2FA and mailbox password are prompted)
           whoami | status               Show the signed-in account and verify the session
           logout                        End the session on the server and remove local credentials
+          ls | list [path]              List a folder in My files (one level; default: the root)
           version                       Print version information
           help                          Show this help
 

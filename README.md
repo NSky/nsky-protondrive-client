@@ -52,8 +52,8 @@ dotnet pack -c Release -p:Version=0.40.1 -p:TreatWarningsAsErrors=false \
 in the upstream sources, and Release builds turn those into errors.
 
 `Directory.Build.rsp` makes every build in this repository use the Rust crypto backend and this
-repository's `nuget.config` (including for the referenced SDK projects). `dotnet build` may still print
-`NU1603` (asked for 0.32.1, got 0.40.1). That warning is harmless: 0.40.1 is the intended version.
+repository's `nuget.config` (including for the referenced SDK projects). It also suppresses `NU1603`
+(asked for 0.32.1, got 0.40.1), which is harmless: 0.40.1 is the intended version.
 
 ## Build and run
 
