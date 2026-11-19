@@ -19,41 +19,35 @@ bidirectional synchronization; the current milestone covers authentication.
 ## Prerequisites
 
 - .NET SDK 10
-- Rust toolchain (`cargo`) to build the cryptography library
-- This layout (sibling directories):
+- The [Proton Drive SDK](https://github.com/ProtonDriveApps/sdk) checked out next to this repository:
 
 ```
 Proton/
 ├── sdk/                        # https://github.com/ProtonDriveApps/sdk
-├── dotnet-crypto/              # https://github.com/ProtonDriveApps/dotnet-crypto
-├── local-nuget/                # local NuGet feed (created below)
 └── nsky-protondrive-client/    # this repository
 ```
 
 The SDK location can be overridden with `-p:ProtonSdkRoot=/path/to/sdk/`.
 
-### Build `Proton.Cryptography`
+### `Proton.Cryptography` package
 
 The SDK depends on the `Proton.Cryptography` NuGet package, which is not published on nuget.org.
-Build it from source for your platform and pack it into the local feed (version must match
-`RustCryptoVersion` in `sdk/config/cs/Packages.props`):
+It is built from the fork [NSky/proton-dotnet-crypto](https://github.com/NSky/proton-dotnet-crypto) by a
+GitHub Actions workflow (linux-x64, linux-arm64, win-x64, osx-arm64, osx-x64) and published to
+`https://nuget.pkg.github.com/NSky/index.json`. The version used is `ProtonCryptographyPackageVersion` in
+`Directory.Build.props`.
+
+GitHub Packages requires authentication even for public packages. Create a classic personal access token
+with the `read:packages` scope and export it before restoring:
 
 ```bash
-cd ../dotnet-crypto/src/rust/proton-crypto-ffi
-cargo build --release --target x86_64-unknown-linux-gnu
-mkdir -p ../../../bin/runtimes/linux-x64/native
-cp target/x86_64-unknown-linux-gnu/release/libproton_crypto.{so,a} ../../../bin/runtimes/linux-x64/native/
-cd ../../..
-dotnet pack -c Release -p:Version=0.40.1 -p:TreatWarningsAsErrors=false \
-  src/dotnet/Proton.Cryptography.csproj --output ../local-nuget
+export NUGET_GITHUB_USER=<your GitHub username>
+export NUGET_GITHUB_TOKEN=<token>
 ```
 
-`TreatWarningsAsErrors=false` is needed because .NET 10.0.1xx reports nullability warnings (CS8620)
-in the upstream sources, and Release builds turn those into errors.
-
 `Directory.Build.rsp` makes every build in this repository use the Rust crypto backend and this
-repository's `nuget.config` (including for the referenced SDK projects). It also suppresses `NU1603`
-(asked for 0.32.1, got 0.40.1), which is harmless: 0.40.1 is the intended version.
+repository's `nuget.config`, including for the referenced SDK projects. Each setting is passed both as `-p`
+and as `-restoreProperty`, because the restore that `dotnet build` runs ignores `-p` properties.
 
 ## Build and run
 

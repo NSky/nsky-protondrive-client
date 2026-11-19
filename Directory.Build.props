@@ -4,6 +4,9 @@
     <!-- Location of the Proton Drive SDK checkout (https://github.com/ProtonDriveApps/sdk). -->
     <ProtonSdkRoot Condition="'$(ProtonSdkRoot)' == ''">$(MSBuildThisFileDirectory)../sdk/</ProtonSdkRoot>
 
+    <!-- Proton.Cryptography from https://github.com/NSky/proton-dotnet-crypto (GitHub Packages feed). -->
+    <ProtonCryptographyPackageVersion>0.40.1</ProtonCryptographyPackageVersion>
+
     <TargetFramework>net10.0</TargetFramework>
     <LangVersion>latest</LangVersion>
     <Nullable>enable</Nullable>

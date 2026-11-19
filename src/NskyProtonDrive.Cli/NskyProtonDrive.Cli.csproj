@@ -8,6 +8,11 @@
   </PropertyGroup>
 
   <ItemGroup>
+    <!-- Referenced directly so the app ships exactly this version (the SDK projects only set a minimum). -->
+    <PackageReference Include="Proton.Cryptography" Version="$(ProtonCryptographyPackageVersion)" />
+  </ItemGroup>
+
+  <ItemGroup>
     <ProjectReference Include="$(ProtonSdkRoot)incubating/account/cs/src/Proton.Drive.Sdk.Account/Proton.Drive.Sdk.Account.csproj" />
     <ProjectReference Include="$(ProtonSdkRoot)client/cs/src/Proton.Drive.Sdk/Proton.Drive.Sdk.csproj" />
   </ItemGroup>
