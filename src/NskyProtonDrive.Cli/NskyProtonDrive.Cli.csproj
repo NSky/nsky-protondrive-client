@@ -13,8 +13,8 @@
   </ItemGroup>
 
   <ItemGroup>
-    <ProjectReference Include="$(ProtonSdkRoot)incubating/account/cs/src/Proton.Drive.Sdk.Account/Proton.Drive.Sdk.Account.csproj" />
-    <ProjectReference Include="$(ProtonSdkRoot)client/cs/src/Proton.Drive.Sdk/Proton.Drive.Sdk.csproj" />
+    <PackageReference Include="Proton.Drive.Sdk" Version="$(ProtonDriveSdkPackageVersion)" />
+    <PackageReference Include="Proton.Drive.Sdk.Account" Version="$(ProtonDriveSdkPackageVersion)" />
   </ItemGroup>
 
 </Project>

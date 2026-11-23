@@ -21,23 +21,18 @@ bidirectional synchronization; the current milestone covers authentication.
 ## Prerequisites
 
 - .NET SDK 10
-- The [Proton Drive SDK](https://github.com/ProtonDriveApps/sdk) checked out next to this repository:
 
-```
-Proton/
-├── sdk/                        # https://github.com/ProtonDriveApps/sdk
-└── nsky-protondrive-client/    # this repository
-```
+### Proton packages
 
-The SDK location can be overridden with `-p:ProtonSdkRoot=/path/to/sdk/`.
+The Proton packages are not published on nuget.org. They come from the GitHub Packages feed
+`https://nuget.pkg.github.com/NSky/index.json`, where GitHub Actions workflows in two forks publish them:
 
-### `Proton.Cryptography` package
+| Package | Built from | Version setting in `Directory.Build.props` |
+| --- | --- | --- |
+| `Proton.Sdk`, `Proton.Drive.Sdk`, `Proton.Drive.Sdk.Account` | [NSky/proton-drive-sdk](https://github.com/NSky/proton-drive-sdk) | `ProtonDriveSdkPackageVersion` |
+| `Proton.Cryptography` (linux-x64, linux-arm64, win-x64, osx-arm64, osx-x64) | [NSky/proton-dotnet-crypto](https://github.com/NSky/proton-dotnet-crypto) | `ProtonCryptographyPackageVersion` |
 
-The SDK depends on the `Proton.Cryptography` NuGet package, which is not published on nuget.org.
-It is built from the fork [NSky/proton-dotnet-crypto](https://github.com/NSky/proton-dotnet-crypto) by a
-GitHub Actions workflow (linux-x64, linux-arm64, win-x64, osx-arm64, osx-x64) and published to
-`https://nuget.pkg.github.com/NSky/index.json`. The version used is `ProtonCryptographyPackageVersion` in
-`Directory.Build.props`.
+`nuget.config` sends every `Proton.*` package to that feed and everything else to nuget.org.
 
 GitHub Packages requires authentication even for public packages. Create a classic personal access token
 with the `read:packages` scope and export it before restoring:
@@ -46,10 +41,6 @@ with the `read:packages` scope and export it before restoring:
 export NUGET_GITHUB_USER=<your GitHub username>
 export NUGET_GITHUB_TOKEN=<token>
 ```
-
-`Directory.Build.rsp` makes every build in this repository use the Rust crypto backend and this
-repository's `nuget.config`, including for the referenced SDK projects. Each setting is passed both as `-p`
-and as `-restoreProperty`, because the restore that `dotnet build` runs ignores `-p` properties.
 
 ## Build and run
 

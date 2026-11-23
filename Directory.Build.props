@@ -1,9 +1,8 @@
 <Project>
 
   <PropertyGroup>
-    <!-- Location of the Proton Drive SDK checkout (https://github.com/ProtonDriveApps/sdk). -->
-    <ProtonSdkRoot Condition="'$(ProtonSdkRoot)' == ''">$(MSBuildThisFileDirectory)../sdk/</ProtonSdkRoot>
-
+    <ProtonDriveSdkPackageVersion>0.1.0</ProtonDriveSdkPackageVersion>
+    
     <!-- Proton.Cryptography from https://github.com/NSky/proton-dotnet-crypto (GitHub Packages feed). -->
     <ProtonCryptographyPackageVersion>0.40.1</ProtonCryptographyPackageVersion>
 
