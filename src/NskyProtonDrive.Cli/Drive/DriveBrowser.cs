@@ -13,6 +13,8 @@ internal sealed class RemotePathNotFoundException(RemotePath path, string reason
 /// </summary>
 internal sealed class DriveBrowser(ProtonDriveClient client)
 {
+    public ProtonDriveClient Client => client;
+
     public static DriveBrowser Create(AuthenticatedContext context)
     {
         var session = context.Session;
