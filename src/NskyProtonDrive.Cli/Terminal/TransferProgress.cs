@@ -1,14 +1,19 @@
 using System.Diagnostics;
 using System.Globalization;
+using System.Text;
 
 namespace NskyProtonDrive.Cli.Terminal;
 
 /// <summary>
 /// Thread-safe progress for a batch of file transfers, rendered on stderr.
-/// On a terminal it redraws one status line; when stderr is redirected it prints one line per finished file.
+/// On a terminal it redraws a block with one line per file in progress and a summary line below;
+/// when stderr is redirected it prints one line per finished file.
 /// </summary>
 internal sealed class TransferProgress : IAsyncDisposable
 {
+    private const int MaxFileLines = 8;
+    private const string ClearToEndOfScreen = "\u001b[J";
+
     private static readonly TimeSpan RefreshInterval = TimeSpan.FromMilliseconds(250);
 
     private readonly bool _enabled;
@@ -18,13 +23,13 @@ internal sealed class TransferProgress : IAsyncDisposable
     private readonly int _totalFiles;
     private readonly Stopwatch _stopwatch = Stopwatch.StartNew();
     private readonly Lock _consoleLock = new();
+    private readonly List<FileTransfer> _active = [];
     private readonly CancellationTokenSource _stopRendering = new();
     private readonly Task _renderLoop;
 
     private long _transferredBytes;
     private int _completedFiles;
-    private string _currentName = string.Empty;
-    private bool _lineVisible;
+    private int _drawnLines;
 
     public TransferProgress(string verb, int totalFiles, long totalBytes, bool enabled)
     {
@@ -40,31 +45,58 @@ internal sealed class TransferProgress : IAsyncDisposable
 
     public TimeSpan Elapsed => _stopwatch.Elapsed;
 
-    public void AddBytes(long delta) => Interlocked.Add(ref _transferredBytes, delta);
-
-    public void FileStarted(string displayName) => Volatile.Write(ref _currentName, displayName);
-
-    public void FileCompleted(string displayName)
+    /// <summary>Registers a file whose transfer is starting; report its progress through the returned handle.</summary>
+    public FileTransfer StartFile(string displayName, long size)
     {
-        Interlocked.Increment(ref _completedFiles);
-
-        if (_enabled && !_interactive)
+        var transfer = new FileTransfer(this, displayName, size);
+        lock (_consoleLock)
         {
-            WriteLine($"{_verb} {displayName}");
+            _active.Add(transfer);
+        }
+
+        return transfer;
+    }
+
+    /// <summary>
+    /// Removes a file from the display. A failed file's bytes are taken back out of the total, so the summary
+    /// only counts what actually arrived.
+    /// </summary>
+    public void FinishFile(FileTransfer transfer, bool succeeded)
+    {
+        if (succeeded)
+        {
+            Interlocked.Increment(ref _completedFiles);
+        }
+        else
+        {
+            transfer.Rollback();
+        }
+
+        lock (_consoleLock)
+        {
+            _active.Remove(transfer);
+        }
+
+        if (succeeded && _enabled && !_interactive)
+        {
+            WriteLine($"{_verb} {transfer.Name}");
         }
     }
 
-    /// <summary>Writes a message without corrupting the status line. Always shown, even with progress disabled.</summary>
+    /// <summary>Writes a message above the progress block. Always shown, even with progress disabled.</summary>
     public void WriteLine(string message)
     {
         lock (_consoleLock)
         {
-            ClearLine();
-            Console.Error.WriteLine(message);
+            var output = new StringBuilder();
+            AppendClear(output);
+            output.Append(message).Append('\n');
             if (_interactive)
             {
-                DrawLine();
+                AppendBlock(output);
             }
+
+            Console.Error.Write(output.ToString());
         }
     }
 
@@ -75,7 +107,9 @@ internal sealed class TransferProgress : IAsyncDisposable
 
         lock (_consoleLock)
         {
-            ClearLine();
+            var output = new StringBuilder();
+            AppendClear(output);
+            Console.Error.Write(output.ToString());
         }
 
         _stopRendering.Dispose();
@@ -105,6 +139,8 @@ internal sealed class TransferProgress : IAsyncDisposable
             : duration.ToString(@"m\:ss", CultureInfo.InvariantCulture);
     }
 
+    private void AddBytes(long delta) => Interlocked.Add(ref _transferredBytes, delta);
+
     private async Task RenderLoopAsync(CancellationToken cancellationToken)
     {
         using var timer = new PeriodicTimer(RefreshInterval);
@@ -114,7 +150,10 @@ internal sealed class TransferProgress : IAsyncDisposable
             {
                 lock (_consoleLock)
                 {
-                    DrawLine();
+                    var output = new StringBuilder();
+                    AppendClear(output);
+                    AppendBlock(output);
+                    Console.Error.Write(output.ToString());
                 }
             }
             while (await timer.WaitForNextTickAsync(cancellationToken).ConfigureAwait(false));
@@ -125,38 +164,95 @@ internal sealed class TransferProgress : IAsyncDisposable
         }
     }
 
-    private void DrawLine()
+    /// <summary>Moves the cursor back to the first line of the block and erases everything from there down.</summary>
+    private void AppendClear(StringBuilder output)
+    {
+        if (_drawnLines == 0)
+        {
+            return;
+        }
+
+        output.Append('\r');
+        if (_drawnLines > 1)
+        {
+            output.Append(CultureInfo.InvariantCulture, $"\u001b[{_drawnLines - 1}A");
+        }
+
+        output.Append(ClearToEndOfScreen);
+        _drawnLines = 0;
+    }
+
+    /// <summary>
+    /// Appends the block without a trailing newline, so the cursor stays on its last line. Every line is cut to the
+    /// terminal width: a wrapped line would take two rows and the next redraw would leave a copy behind.
+    /// </summary>
+    private void AppendBlock(StringBuilder output)
+    {
+        var width = GetConsoleWidth();
+        var lines = new List<string>(MaxFileLines + 2);
+
+        var shown = _active.Take(MaxFileLines).ToList();
+        if (shown.Count > 0)
+        {
+            var sizeColumn = shown.Max(f => FormatFileBytes(f).Length);
+            var nameColumn = Math.Max(1, Math.Min(shown.Max(f => f.Name.Length), width - sizeColumn - 9));
+
+            foreach (var file in shown)
+            {
+                var size = FormatFileBytes(file);
+                lines.Add(string.Create(
+                    CultureInfo.InvariantCulture,
+                    $"{file.Percent,4}%  {ShortenStart(file.Name, nameColumn).PadRight(nameColumn)}  {size.PadLeft(sizeColumn)}"));
+            }
+
+            if (_active.Count > shown.Count)
+            {
+                lines.Add($"       ... and {_active.Count - shown.Count} more");
+            }
+        }
+
+        lines.Add(FormatSummary());
+
+        for (var i = 0; i < lines.Count; i++)
+        {
+            if (i > 0)
+            {
+                output.Append('\n');
+            }
+
+            output.Append(Truncate(lines[i], width));
+        }
+
+        _drawnLines = lines.Count;
+    }
+
+    private string FormatSummary()
     {
         var transferred = TransferredBytes;
         var elapsed = _stopwatch.Elapsed.TotalSeconds;
         var rate = elapsed > 0.5 ? transferred / elapsed : 0;
 
-        var percent = _totalBytes > 0 ? Math.Min(100, transferred * 100 / _totalBytes) : 0;
+        var percent = _totalBytes > 0 ? Math.Clamp(transferred * 100 / _totalBytes, 0, 100) : 0;
         var eta = rate > 0 && _totalBytes > transferred
             ? " ETA " + FormatDuration(TimeSpan.FromSeconds((_totalBytes - transferred) / rate))
             : string.Empty;
 
-        var line = string.Create(
+        return string.Create(
             CultureInfo.InvariantCulture,
-            $"{percent,3}% {FormatBytes(transferred)}/{FormatBytes(_totalBytes)}  {Volatile.Read(ref _completedFiles)}/{_totalFiles} files  {FormatBytes((long)rate)}/s{eta}  {Volatile.Read(ref _currentName)}");
-
-        var width = GetConsoleWidth();
-        if (line.Length > width)
-        {
-            line = line[..Math.Max(0, width - 1)] + "…";
-        }
-
-        Console.Error.Write("\r\u001b[2K" + line);
-        _lineVisible = true;
+            $"{percent,4}%  {FormatBytes(transferred)}/{FormatBytes(_totalBytes)}  {Volatile.Read(ref _completedFiles)}/{_totalFiles} files  {FormatBytes((long)rate)}/s{eta}");
     }
 
-    private void ClearLine()
+    private static string FormatFileBytes(FileTransfer file) => $"{FormatBytes(file.Bytes)} / {FormatBytes(file.Size)}";
+
+    /// <summary>Keeps the end of a path, which holds the file name.</summary>
+    private static string ShortenStart(string text, int width)
     {
-        if (_lineVisible)
-        {
-            Console.Error.Write("\r\u001b[2K");
-            _lineVisible = false;
-        }
+        return text.Length <= width ? text : "…" + text[^Math.Max(0, width - 1)..];
+    }
+
+    private static string Truncate(string line, int width)
+    {
+        return line.Length <= width ? line : line[..Math.Max(0, width - 1)] + "…";
     }
 
     private static int GetConsoleWidth()
@@ -169,6 +265,39 @@ internal sealed class TransferProgress : IAsyncDisposable
         catch (IOException)
         {
             return 79;
+        }
+    }
+
+    /// <summary>One file in progress. <see cref="Report"/> takes the cumulative byte count for the file.</summary>
+    public sealed class FileTransfer
+    {
+        private readonly TransferProgress _owner;
+        private long _bytes;
+
+        internal FileTransfer(TransferProgress owner, string name, long size)
+        {
+            _owner = owner;
+            Name = name;
+            Size = size;
+        }
+
+        public string Name { get; }
+
+        public long Size { get; }
+
+        internal long Bytes => Interlocked.Read(ref _bytes);
+
+        internal long Percent => Size > 0 ? Math.Clamp(Bytes * 100 / Size, 0, 100) : 0;
+
+        /// <summary>Sets how many bytes of this file have been transferred so far (it may go down after a retry).</summary>
+        public void Report(long cumulativeBytes)
+        {
+            _owner.AddBytes(cumulativeBytes - Interlocked.Exchange(ref _bytes, cumulativeBytes));
+        }
+
+        internal void Rollback()
+        {
+            _owner.AddBytes(-Interlocked.Exchange(ref _bytes, 0));
         }
     }
 }

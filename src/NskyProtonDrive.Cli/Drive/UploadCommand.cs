@@ -262,20 +262,22 @@ internal static class UploadCommand
                 new ParallelOptions { MaxDegreeOfParallelism = MaxParallelFiles, CancellationToken = cancellationToken },
                 async (item, ct) =>
                 {
-                    progress.FileStarted(item.RemoteDisplayPath);
+                    var transfer = progress.StartFile(item.RemoteDisplayPath, item.File.Length);
                     try
                     {
-                        await UploadFileAsync(client, item, progress, ct).ConfigureAwait(false);
-                        progress.FileCompleted(item.RemoteDisplayPath);
+                        await UploadFileAsync(client, item, transfer, progress, ct).ConfigureAwait(false);
+                        progress.FinishFile(transfer, succeeded: true);
                     }
                     catch (NodeWithSameNameExistsException)
                     {
                         Interlocked.Increment(ref failures);
+                        progress.FinishFile(transfer, succeeded: false);
                         progress.WriteLine($"Failed {item.RemoteDisplayPath}: it appeared on Proton Drive after the check; not overwritten");
                     }
                     catch (Exception ex) when (ex is not OperationCanceledException || !ct.IsCancellationRequested)
                     {
                         Interlocked.Increment(ref failures);
+                        progress.FinishFile(transfer, succeeded: false);
                         progress.WriteLine($"Failed {item.RemoteDisplayPath}: {ex.Message}");
                     }
                 }).ConfigureAwait(false);
@@ -293,63 +295,59 @@ internal static class UploadCommand
                 summary += $"; {failures} failed";
             }
 
-            Console.Error.WriteLine(summary);
+            progress.WriteLine(summary);
         }
 
         return failures == 0 ? 0 : 1;
     }
 
-    private static async Task UploadFileAsync(ProtonDriveClient client, FileToUpload item, TransferProgress progress, CancellationToken cancellationToken)
+    private static async Task UploadFileAsync(
+        ProtonDriveClient client,
+        FileToUpload item,
+        TransferProgress.FileTransfer transfer,
+        TransferProgress progress,
+        CancellationToken cancellationToken)
     {
         var parentUid = item.Parent.Uid ?? throw new InvalidOperationException($"Parent of {item.RemoteDisplayPath} was not created.");
-        long reportedBytes = 0;
 
-        try
+        item.File.Refresh();
+        var metadata = new FileUploadMetadata { LastModificationTime = item.File.LastWriteTimeUtc };
+
+        using var uploader = await client.GetFileUploaderAsync(
+                parentUid,
+                item.Name,
+                MediaTypes.FromFileName(item.Name),
+                item.File.Length,
+                metadata,
+                overrideExistingDraftByOtherClient: false,
+                cancellationToken)
+            .ConfigureAwait(false);
+
+        var controller = uploader.UploadFromFile(
+            item.File.FullName,
+            thumbnails: [],
+            (uploaded, _) => transfer.Report(uploaded),
+            expectedSha1Provider: null,
+            cancellationToken);
+
+        await using (controller.ConfigureAwait(false))
         {
-            item.File.Refresh();
-            var metadata = new FileUploadMetadata { LastModificationTime = item.File.LastWriteTimeUtc };
-
-            using var uploader = await client.GetFileUploaderAsync(
-                    parentUid,
-                    item.Name,
-                    MediaTypes.FromFileName(item.Name),
-                    item.File.Length,
-                    metadata,
-                    overrideExistingDraftByOtherClient: false,
-                    cancellationToken)
-                .ConfigureAwait(false);
-
-            var controller = uploader.UploadFromFile(
-                item.File.FullName,
-                thumbnails: [],
-                (uploaded, _) => progress.AddBytes(uploaded - Interlocked.Exchange(ref reportedBytes, uploaded)),
-                expectedSha1Provider: null,
-                cancellationToken);
-
-            await using (controller.ConfigureAwait(false))
+            for (var attempt = 1; ; attempt++)
             {
-                for (var attempt = 1; ; attempt++)
+                try
                 {
-                    try
-                    {
-                        await controller.Completion.ConfigureAwait(false);
-                        break;
-                    }
-                    catch (Exception ex) when (controller.IsPaused && attempt < MaxAttemptsPerFile && !cancellationToken.IsCancellationRequested)
-                    {
-                        // The SDK pauses uploads that failed in a resumable way (e.g. a network error).
-                        var delay = TimeSpan.FromSeconds(Math.Pow(2, attempt));
-                        progress.WriteLine($"Retrying {item.RemoteDisplayPath} in {delay.TotalSeconds:0}s ({ex.Message})");
-                        await Task.Delay(delay, cancellationToken).ConfigureAwait(false);
-                        controller.Resume();
-                    }
+                    await controller.Completion.ConfigureAwait(false);
+                    break;
+                }
+                catch (Exception ex) when (controller.IsPaused && attempt < MaxAttemptsPerFile && !cancellationToken.IsCancellationRequested)
+                {
+                    // The SDK pauses uploads that failed in a resumable way (e.g. a network error).
+                    var delay = TimeSpan.FromSeconds(Math.Pow(2, attempt));
+                    progress.WriteLine($"Retrying {item.RemoteDisplayPath} in {delay.TotalSeconds:0}s ({ex.Message})");
+                    await Task.Delay(delay, cancellationToken).ConfigureAwait(false);
+                    controller.Resume();
                 }
             }
-        }
-        catch
-        {
-            progress.AddBytes(-Interlocked.Exchange(ref reportedBytes, 0));
-            throw;
         }
     }
 

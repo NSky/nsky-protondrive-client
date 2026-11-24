@@ -194,15 +194,16 @@ internal static class DownloadCommand
                 new ParallelOptions { MaxDegreeOfParallelism = MaxParallelFiles, CancellationToken = cancellationToken },
                 async (item, ct) =>
                 {
-                    progress.FileStarted(item.RemotePath);
+                    var transfer = progress.StartFile(item.RemotePath, GetExpectedSize(item.Node));
                     try
                     {
-                        await DownloadFileAsync(client, item, progress, ct).ConfigureAwait(false);
-                        progress.FileCompleted(item.RemotePath);
+                        await DownloadFileAsync(client, item, transfer, progress, ct).ConfigureAwait(false);
+                        progress.FinishFile(transfer, succeeded: true);
                     }
                     catch (Exception ex) when (ex is not OperationCanceledException || !ct.IsCancellationRequested)
                     {
                         Interlocked.Increment(ref failures);
+                        progress.FinishFile(transfer, succeeded: false);
                         progress.WriteLine($"Failed {item.RemotePath}: {ex.Message}");
                     }
                 }).ConfigureAwait(false);
@@ -220,16 +221,20 @@ internal static class DownloadCommand
                 summary += $"; {failures} failed";
             }
 
-            Console.Error.WriteLine(summary);
+            progress.WriteLine(summary);
         }
 
         return failures == 0 ? 0 : 1;
     }
 
-    private static async Task DownloadFileAsync(ProtonDriveClient client, FileToDownload item, TransferProgress progress, CancellationToken cancellationToken)
+    private static async Task DownloadFileAsync(
+        ProtonDriveClient client,
+        FileToDownload item,
+        TransferProgress.FileTransfer transfer,
+        TransferProgress progress,
+        CancellationToken cancellationToken)
     {
         var partialPath = item.LocalPath + PartialSuffix;
-        long reportedBytes = 0;
 
         try
         {
@@ -237,7 +242,7 @@ internal static class DownloadCommand
             {
                 var controller = downloader.DownloadToFile(
                     partialPath,
-                    (written, _) => progress.AddBytes(written - Interlocked.Exchange(ref reportedBytes, written)),
+                    (written, _) => transfer.Report(written),
                     cancellationToken);
 
                 await using (controller.ConfigureAwait(false))
@@ -269,7 +274,6 @@ internal static class DownloadCommand
         }
         catch
         {
-            progress.AddBytes(-Interlocked.Exchange(ref reportedBytes, 0));
             TryDelete(partialPath);
             throw;
         }

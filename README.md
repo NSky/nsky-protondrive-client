@@ -71,8 +71,9 @@ Remote paths are relative to My files: `Docs/2024` and `/Docs/2024` are the same
 
 - A **file** is saved into `<local-folder>` (created if needed). An existing local file is never overwritten.
 - A **folder's contents** are mirrored into `<local-folder>`, which must be empty or not exist yet.
-- Progress is shown by default: a live status line on a terminal, or one line per file when stderr is
-  redirected. `--no-progress` (or `-q`) prints only errors and the summary.
+- Progress is shown by default. On a terminal it is a live block with one line per file in progress and an
+  overall line below (total, files done, speed, ETA). When stderr is redirected it prints one line per
+  finished file instead. `--no-progress` (or `-q`) prints only errors and the summary.
 - Files are written as `*.protondrive-part` and renamed when complete, so an interrupted download never
   leaves a truncated file. Modification times are preserved. Up to 4 files download in parallel, and a
   file that fails in a resumable way is retried up to 3 times.
