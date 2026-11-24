@@ -16,7 +16,8 @@ bidirectional synchronization; the current milestone covers authentication.
 | Human verification (CAPTCHA) | ❌ not supported yet |
 | List a folder (`ls`) | ✅ |
 | Download a file or folder (`download`) | ✅ |
-| Upload / sync | planned |
+| Upload a file or folder (`upload`), never overwriting | ✅ |
+| Sync | planned |
 
 ## Prerequisites
 
@@ -62,6 +63,7 @@ The executable is `src/NskyProtonDrive.Cli/bin/Debug/net10.0/protondrive`.
 | `logout` | End the session on the server and delete the local session |
 | `ls [path]` | List one level of a folder in My files (default: the root) |
 | `download <remote-path> <local-folder> [--no-progress]` | Download a file or a folder |
+| `upload <local-path> [remote-folder] [--no-progress]` | Upload a file or a folder |
 
 Remote paths are relative to My files: `Docs/2024` and `/Docs/2024` are the same.
 
@@ -77,6 +79,21 @@ Remote paths are relative to My files: `Docs/2024` and `/Docs/2024` are the same
 - Proton Docs and Sheets are skipped: they have no file content to download.
 - Names that are not valid on the local system get `_` in place of the invalid characters.
 - Exit code 1 if any file failed, 130 if cancelled with Ctrl+C.
+
+`upload`:
+
+- A **file** goes into `[remote-folder]`. A **folder** is uploaded with everything in it as
+  `[remote-folder]/<folder name>`. `[remote-folder]` must already exist; the default is the root of My files.
+- **Nothing on the server is overwritten.** Before anything is sent, every name is checked against the server.
+  If any file already exists there, or a local folder name is taken by a remote file, the conflicts are listed
+  and nothing is uploaded. Trashed items count as conflicts too: empty the trash or rename them first.
+- A remote folder with the same name as a local folder is reused, so new files can be added to an existing
+  folder tree, as long as none of the files are already there.
+- If an item appears on the server after the check, the server rejects it and it is reported as failed.
+  It is still not overwritten.
+- Symbolic links are skipped. Modification times are preserved. Up to 4 files upload in parallel, with the
+  same progress display and retries as `download`.
+- Exit code 1 if there were conflicts or any file failed, 130 if cancelled with Ctrl+C.
 
 ## Where data is stored
 

@@ -61,16 +61,17 @@ internal sealed class DriveBrowser(ProtonDriveClient client)
         return current;
     }
 
-    /// <summary>Lists the direct children of a folder, skipping trashed items.</summary>
+    /// <summary>Lists the direct children of a folder, skipping trashed items unless <paramref name="includeTrashed"/> is set.</summary>
     public async IAsyncEnumerable<Node> ListChildrenAsync(
         FolderNode folder,
-        [System.Runtime.CompilerServices.EnumeratorCancellation] CancellationToken cancellationToken)
+        [System.Runtime.CompilerServices.EnumeratorCancellation] CancellationToken cancellationToken,
+        bool includeTrashed = false)
     {
         var childUids = client.EnumerateFolderChildrenNodeUidsAsync(folder.Uid, cancellationToken);
 
         await foreach (var child in client.EnumerateNodesAsync(childUids, cancellationToken).ConfigureAwait(false))
         {
-            if (child.TrashTime is null)
+            if (includeTrashed || child.TrashTime is null)
             {
                 yield return child;
             }

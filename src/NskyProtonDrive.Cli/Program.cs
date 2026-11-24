@@ -81,6 +81,24 @@ try
             return await DownloadCommand.RunAsync(context, positional[0], positional[1], showProgress, cts.Token);
         }
 
+        case "upload":
+        case "put":
+        {
+            var flags = args.Skip(1).Where(a => a.StartsWith('-')).ToHashSet(StringComparer.Ordinal);
+            var positional = args.Skip(1).Where(a => !a.StartsWith('-')).ToArray();
+            var unknownFlags = flags.Except(["--no-progress", "-q", "--quiet"]).ToArray();
+
+            if (positional.Length is < 1 or > 2 || unknownFlags.Length > 0)
+            {
+                Console.Error.WriteLine($"Usage: {AppInfo.CommandName} upload <local-path> [remote-folder] [--no-progress]");
+                return 2;
+            }
+
+            var showProgress = !flags.Overlaps(["--no-progress", "-q", "--quiet"]);
+            var context = await auth.ResumeAsync(cts.Token);
+            return await UploadCommand.RunAsync(context, positional[0], positional.ElementAtOrDefault(1), showProgress, cts.Token);
+        }
+
         case "version":
         case "--version":
             Console.WriteLine($"{AppInfo.CommandName} {AppInfo.Version} ({AppInfo.ProtonAppVersion})");
@@ -103,7 +121,7 @@ catch (NotLoggedInException ex)
     Console.Error.WriteLine(ex.Message);
     return 1;
 }
-catch (Exception ex) when (ex is RemotePathNotFoundException or DownloadTargetException)
+catch (Exception ex) when (ex is RemotePathNotFoundException or DownloadTargetException or UploadTargetException)
 {
     Console.Error.WriteLine(ex.Message);
     return 1;
@@ -170,6 +188,10 @@ static void PrintHelp()
           download | get <remote-path> <local-folder> [--no-progress]
                                         Download a file into <local-folder>, or a folder's contents
                                         into <local-folder> (which must be empty or not exist)
+          upload | put <local-path> [remote-folder] [--no-progress]
+                                        Upload a file or a folder into an existing remote folder
+                                        (default: the root). Nothing on the server is overwritten:
+                                        if any name already exists, nothing is uploaded
           version                       Print version information
           help                          Show this help
 
