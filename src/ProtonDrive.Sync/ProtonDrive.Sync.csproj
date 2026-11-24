@@ -1,0 +1,21 @@
+<Project Sdk="Microsoft.NET.Sdk">
+
+  <!-- The bidirectional sync engine: state store, scanners, planner and executor. No console output. -->
+  <PropertyGroup>
+    <RootNamespace>NSkyLabs.ProtonDrive.Sync</RootNamespace>
+    <AssemblyName>NSkyLabs.ProtonDrive.Sync</AssemblyName>
+  </PropertyGroup>
+
+  <ItemGroup>
+    <ProjectReference Include="../ProtonDrive.Core/ProtonDrive.Core.csproj" />
+    <PackageReference Include="Microsoft.Data.Sqlite" Version="$(MicrosoftDataSqlitePackageVersion)" />
+  </ItemGroup>
+
+  <ItemGroup>
+    <Using Include="NSkyLabs.ProtonDrive.Core" />
+    <Using Include="NSkyLabs.ProtonDrive.Core.Drive" />
+    <InternalsVisibleTo Include="protondrive" />
+    <InternalsVisibleTo Include="NSkyLabs.ProtonDrive.Sync.Tests" />
+  </ItemGroup>
+
+</Project>

@@ -1,0 +1,11 @@
+# One sync pass over all synced folders ("protondrive sync"), started by protondrive-sync.timer.
+# Use either this timer or protondrive-sync-watch.service; running both is safe (passes never overlap) but redundant.
+
+[Unit]
+Description=Proton Drive sync (one pass)
+Wants=network-online.target
+After=network-online.target
+
+[Service]
+Type=oneshot
+ExecStart=%h/.local/bin/protondrive sync --no-progress

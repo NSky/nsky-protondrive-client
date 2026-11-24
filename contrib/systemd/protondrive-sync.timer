@@ -1,0 +1,16 @@
+# Runs protondrive-sync.service every 15 minutes.
+# Install as user units:
+#   cp protondrive-sync.service protondrive-sync.timer ~/.config/systemd/user/
+#   systemctl --user daemon-reload
+#   systemctl --user enable --now protondrive-sync.timer
+
+[Unit]
+Description=Proton Drive sync every 15 minutes
+
+[Timer]
+OnBootSec=2min
+OnUnitActiveSec=15min
+Persistent=true
+
+[Install]
+WantedBy=timers.target

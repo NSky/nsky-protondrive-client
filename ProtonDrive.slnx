@@ -1,0 +1,10 @@
+<Solution>
+  <Folder Name="/src/">
+    <Project Path="src/ProtonDrive.Core/ProtonDrive.Core.csproj" />
+    <Project Path="src/ProtonDrive.Sync/ProtonDrive.Sync.csproj" />
+    <Project Path="src/ProtonDrive.Cli/ProtonDrive.Cli.csproj" />
+  </Folder>
+  <Folder Name="/tests/">
+    <Project Path="tests/ProtonDrive.Sync.Tests/ProtonDrive.Sync.Tests.csproj" />
+  </Folder>
+</Solution>

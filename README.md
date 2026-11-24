@@ -1,10 +1,15 @@
 # nsky-protondrive-client
 
 Unofficial command-line client for Proton Drive, written in C# on top of the
-[Proton Drive SDK](https://github.com/ProtonDriveApps/sdk). The goal is a CLI with
-bidirectional synchronization; the current milestone covers authentication.
+[Proton Drive SDK](https://github.com/ProtonDriveApps/sdk), with bidirectional synchronization of local
+folders.
 
-> This is a third-party application not officially supported by Proton.
+> [!WARNING]
+> **Alpha version.** This is unofficial, third-party software. It is not affiliated with, endorsed by or
+> supported by Proton AG; "Proton" and "Proton Drive" are trademarks of Proton AG. It is provided "as is",
+> without warranty of any kind, and the authors accept no responsibility or liability for any loss of data,
+> damage to your account or other harm resulting from its use. The sync feature changes and deletes files on
+> both sides: keep independent backups of anything important. See [Disclaimer](#disclaimer).
 
 ## Status
 
@@ -17,7 +22,7 @@ bidirectional synchronization; the current milestone covers authentication.
 | List a folder (`ls`) | ✅ |
 | Download a file or folder (`download`) | ✅ |
 | Upload a file or folder (`upload`), never overwriting | ✅ |
-| Sync | planned |
+| Bidirectional sync of local folders (`sync`), once or continuously (`--watch`) | ✅ |
 
 ## Prerequisites
 
@@ -47,12 +52,31 @@ export NUGET_GITHUB_TOKEN=<token>
 
 ```bash
 dotnet build
-dotnet run --project src/NskyProtonDrive.Cli -- login
-dotnet run --project src/NskyProtonDrive.Cli -- whoami
-dotnet run --project src/NskyProtonDrive.Cli -- logout
+dotnet run --project src/ProtonDrive.Cli -- login
+dotnet run --project src/ProtonDrive.Cli -- whoami
+dotnet run --project src/ProtonDrive.Cli -- logout
 ```
 
-The executable is `src/NskyProtonDrive.Cli/bin/Debug/net10.0/protondrive`.
+The executable is `src/ProtonDrive.Cli/bin/Debug/net10.0/protondrive`. Unit tests (sync planner, session
+refresh): `dotnet run --project tests/ProtonDrive.Sync.Tests`.
+
+To install it for the systemd units below (needs the .NET 10 runtime):
+
+```bash
+dotnet publish src/ProtonDrive.Cli -c Release -o ~/.local/share/protondrive
+ln -sf ~/.local/share/protondrive/protondrive ~/.local/bin/protondrive
+```
+
+### Projects
+
+All namespaces start with `NSkyLabs.ProtonDrive`.
+
+| Project | Contents |
+| --- | --- |
+| `src/ProtonDrive.Core` | Login and session store, Drive navigation, shared helpers |
+| `src/ProtonDrive.Sync` | The sync engine: state database, local and remote scanning, planner, executor, watch mode. No console output |
+| `src/ProtonDrive.Cli` | The `protondrive` command: argument parsing and console output |
+| `tests/ProtonDrive.Sync.Tests` | Unit tests |
 
 ## Commands
 
@@ -64,6 +88,10 @@ The executable is `src/NskyProtonDrive.Cli/bin/Debug/net10.0/protondrive`.
 | `ls [path]` | List one level of a folder in My files (default: the root) |
 | `download <remote-path> <local-folder> [--no-progress]` | Download a file or a folder |
 | `upload <local-path> [remote-folder] [--no-progress]` | Upload a file or a folder |
+| `sync add <local-folder> <remote-folder>` | Keep a local folder and a remote folder in sync |
+| `sync remove <local-folder\|id>` | Stop syncing a folder; no files are changed |
+| `sync list`, `sync status` | Show synced folders, their last sync and whether a sync is running |
+| `sync [<local-folder\|id>] [--watch] [--dry-run] [--force] [--no-progress]` | Sync all folders (or one) once, or continuously |
 
 Remote paths are relative to My files: `Docs/2024` and `/Docs/2024` are the same.
 
@@ -96,13 +124,96 @@ Remote paths are relative to My files: `Docs/2024` and `/Docs/2024` are the same
   same progress display and retries as `download`.
 - Exit code 1 if there were conflicts or any file failed, 130 if cancelled with Ctrl+C.
 
+## Sync
+
+```bash
+protondrive sync add ~/Proton /Backup/Laptop   # creates either folder if missing
+protondrive sync --dry-run                     # show what the first sync would do
+protondrive sync                               # one pass over all synced folders
+protondrive sync --watch                       # keep syncing until stopped
+```
+
+**How it decides.** Each synced folder has a state database recording, for every item, what both sides agreed
+on after the last sync. A pass compares the local folder, the remote folder and that record, so it knows which
+side changed:
+
+- A change on one side is applied to the other: new files and folders, edits (uploaded as a new revision, so
+  Proton keeps the old version in the file's history), and deletions.
+- An edit wins over a deletion: a file edited on one side and deleted on the other is restored.
+- A file changed on both sides is compared by content (SHA-1). If it differs, both are kept: the local copy is
+  renamed to `name (conflict <host> <date time>).ext` and uploaded, and the remote version is downloaded.
+- A folder deleted on one side is deleted on the other only if nothing in it changed there; otherwise it is
+  re-created and only the unchanged items in it are deleted.
+- A file or folder moved or renamed on the server is moved locally, not downloaded again.
+
+**Nothing is deleted permanently.** Remote deletions go to the Proton Drive trash; local ones to
+`<synced folder>/.protondrive/trash/<date>/`. A local file is replaced by a download only if it is still
+unchanged since the scan; if it changed meanwhile, it is left alone and synced on the next pass.
+
+**Safety checks.** A pass is refused, and nothing is changed, when the local or remote folder is suddenly empty
+although items were synced before (for example an unmounted disk), or when it would delete more than half of
+the synced items (and more than 10). `--force` overrides the checks. A missing local folder is never re-created.
+
+**Finding changes.** Remote changes come from the Drive events feed: the first pass lists the whole remote
+folder, later passes fetch only the events since the last one. Local changes are found by a scan of names,
+sizes and modification times (no file content is read). With `--watch`, file system events trigger a pass a few
+seconds after changes settle, the events feed is polled every 30 seconds, and a full scan runs every 15 minutes.
+
+**Running it automatically.** Two passes on the same folder never overlap (a lock per folder), so `sync` can run
+from cron, a timer and by hand at the same time. User units for systemd are in `contrib/systemd/`:
+
+- `protondrive-sync-watch.service`: runs `sync --watch` continuously.
+- `protondrive-sync.service` + `protondrive-sync.timer`: one pass every 15 minutes.
+
+The install steps are in the comments at the top of each file. If the Proton session ends, the watch service
+exits with code 3 and stays stopped; run `protondrive login` and start it again.
+
+**Not synced:** symbolic links, special files, names that are not valid on this system, Proton Docs and Sheets
+(they have no file content), and editor lock and swap files (`.~lock.*#`, `~$*`, `.*.swp`), `.DS_Store`,
+`Thumbs.db`, `desktop.ini`. A folder that cannot be read is left unchanged on both sides.
+
+**Known limitations:**
+
+- A local rename or move is synced as a new item plus a deletion, so its content is uploaded again. (A rename
+  on the server is detected as a move.)
+- Two folders on the same computer cannot be synced to overlapping remote folders.
+- Names are compared case-sensitively, as on Linux.
+
 ## Where data is stored
 
-The session (tokens and the key passphrases derived from your password) is stored in
-`~/.config/protondrive/session.json` with `0600` permissions. Your password itself is never stored.
-Moving these secrets to the OS secret store is planned.
+| What | Where |
+| --- | --- |
+| Session: tokens and the key passphrases derived from your password (`0600`) | `~/.config/protondrive/session.json` |
+| Synced folder pairs | `~/.config/protondrive/sync.json` |
+| Sync state databases and locks | `~/.local/state/protondrive/sync/` (`$XDG_STATE_HOME`) |
+| Downloads in progress, local trash | `<synced folder>/.protondrive/` |
+
+Your password itself is never stored. Moving the secrets to the OS secret store is planned.
+
+Several processes can use the session at once, for example the sync service and a command run by hand. Proton
+refresh tokens can only be used once, so token refreshes are coordinated through a lock file
+(`session.lock`): a process that finds the tokens already refreshed by another one uses those instead of
+refreshing again.
 
 ## Application identification
 
 Requests carry `x-pm-appversion: external-drive-nsky_protondrive@<version>-alpha`, as required by
 Proton's [third-party usage guidelines](https://github.com/ProtonDriveApps/sdk#usage-guidelines-for-personal-projects).
+
+## Disclaimer
+
+This software is an **alpha version** under active development. Expect bugs, and expect behaviour and stored
+data formats to change between versions.
+
+- It is an **unofficial, third-party client**. It is not affiliated with, endorsed by, sponsored by or supported
+  by Proton AG. "Proton" and "Proton Drive" are trademarks of Proton AG and are used here only to describe what
+  the software works with. Do not contact Proton support about problems with it.
+- It is provided **"as is", without warranty of any kind**, express or implied, as stated in the
+  [MIT License](LICENSE). In no event shall the authors or copyright holders be liable for any claim, damages or
+  other liability, including **loss or corruption of data** and problems with your Proton account, arising from
+  its use.
+- `sync`, `upload` and `download` create, change, move and delete files on your computer and in your Proton
+  Drive. Try them on unimportant folders first, use `sync --dry-run` to preview, and **keep independent backups**.
+- You are responsible for using it in line with Proton's terms of service and its
+  [guidelines for third-party clients](https://github.com/ProtonDriveApps/sdk#usage-guidelines-for-personal-projects).
+

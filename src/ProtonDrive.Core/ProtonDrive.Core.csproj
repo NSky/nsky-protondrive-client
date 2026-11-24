@@ -1,0 +1,22 @@
+<Project Sdk="Microsoft.NET.Sdk">
+
+  <!-- Session, authentication and Drive helpers shared by the command-line app and the sync engine. -->
+  <PropertyGroup>
+    <RootNamespace>NSkyLabs.ProtonDrive.Core</RootNamespace>
+    <AssemblyName>NSkyLabs.ProtonDrive.Core</AssemblyName>
+  </PropertyGroup>
+
+  <ItemGroup>
+    <!-- Referenced directly so the app ships exactly this version (the SDK packages only set a minimum). -->
+    <PackageReference Include="Proton.Cryptography" Version="$(ProtonCryptographyPackageVersion)" />
+    <PackageReference Include="Proton.Drive.Sdk" Version="$(ProtonDriveSdkPackageVersion)" />
+    <PackageReference Include="Proton.Drive.Sdk.Account" Version="$(ProtonDriveSdkPackageVersion)" />
+  </ItemGroup>
+
+  <ItemGroup>
+    <InternalsVisibleTo Include="protondrive" />
+    <InternalsVisibleTo Include="NSkyLabs.ProtonDrive.Sync" />
+    <InternalsVisibleTo Include="NSkyLabs.ProtonDrive.Sync.Tests" />
+  </ItemGroup>
+
+</Project>

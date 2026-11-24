@@ -1,0 +1,21 @@
+<Project Sdk="Microsoft.NET.Sdk">
+
+  <PropertyGroup>
+    <OutputType>Exe</OutputType>
+    <AssemblyName>protondrive</AssemblyName>
+    <RootNamespace>NSkyLabs.ProtonDrive.Cli</RootNamespace>
+    <InvariantGlobalization>true</InvariantGlobalization>
+  </PropertyGroup>
+
+  <ItemGroup>
+    <ProjectReference Include="../ProtonDrive.Core/ProtonDrive.Core.csproj" />
+    <ProjectReference Include="../ProtonDrive.Sync/ProtonDrive.Sync.csproj" />
+  </ItemGroup>
+
+  <ItemGroup>
+    <Using Include="NSkyLabs.ProtonDrive.Core" />
+    <Using Include="NSkyLabs.ProtonDrive.Core.Auth" />
+    <Using Include="NSkyLabs.ProtonDrive.Core.Drive" />
+  </ItemGroup>
+
+</Project>
