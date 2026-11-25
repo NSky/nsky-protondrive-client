@@ -24,7 +24,65 @@ folders.
 | Upload a file or folder (`upload`), never overwriting | ✅ |
 | Bidirectional sync of local folders (`sync`), once or continuously (`--watch`) | ✅ |
 
-## Prerequisites
+## Install
+
+protondrive is installed system-wide, so every user on the machine can use it. Each user then signs in and
+chooses folders on their own: logins, settings and sync state stay in each user's home folder.
+
+The release archives are self-contained: no .NET runtime or other packages are needed. They work on
+x86-64 and ARM64 Linux distributions with glibc 2.34 or newer (Ubuntu 22.04+, Debian 12+, Fedora 35+,
+RHEL/Rocky/Alma 9+, openSUSE Leap 15.6+/Tumbleweed, Arch, and others). Alpine and other musl-based distributions
+are not supported.
+
+**From a release** (download `protondrive-<version>-linux-x64.tar.gz` or `-linux-arm64.tar.gz` from the
+[releases page](https://github.com/NSky/nsky-protondrive-client/releases), and check it against `SHA256SUMS`):
+
+```bash
+tar -xzf protondrive-0.2.0-linux-x64.tar.gz
+sudo protondrive-0.2.0-linux-x64/install.sh            # into /usr/local; --prefix /usr is also possible
+```
+
+**From source** (needs the build prerequisites below):
+
+```bash
+make                  # as your user
+sudo make install     # PREFIX=/usr/local by default; DESTDIR is supported for packaging
+```
+
+What goes where (with the default prefix `/usr/local`):
+
+| What | Where |
+| --- | --- |
+| The program and its two native libraries | `/usr/local/lib/protondrive/` |
+| The `protondrive` command (symlink) | `/usr/local/bin/protondrive` |
+| systemd user units | `/usr/local/lib/systemd/user/` |
+| README and license | `/usr/local/share/doc/protondrive/`, `/usr/local/share/licenses/protondrive/` |
+
+To remove it: `sudo ./install.sh --uninstall` from the release folder, or `sudo make uninstall`. Users' settings and
+sync state in their home folders are left in place. Users who enabled background sync should first run
+`protondrive service disable`.
+
+### Background sync for each user
+
+Each user who wants their folders kept in sync without a terminal open runs, as themselves (not with sudo):
+
+```bash
+protondrive login
+protondrive sync add ~/Proton /Backup/Laptop
+protondrive service enable            # continuous sync; or: protondrive service enable --timer (every 15 min)
+protondrive service status
+```
+
+`service enable` enables a systemd **user** service, so each user runs their own instance under their own
+account, independently of other users. It also enables *linger* for the user (`loginctl enable-linger`), so
+the service starts at boot and keeps running after the user logs out. If the system does not allow users to do that,
+`service enable` prints the command an administrator can run (`sudo loginctl enable-linger <user>`).
+
+`protondrive service disable` stops it. Logs: `journalctl --user -u protondrive-sync-watch`.
+
+## Building from source
+
+### Prerequisites
 
 - .NET SDK 10
 
@@ -48,24 +106,30 @@ export NUGET_GITHUB_USER=<your GitHub username>
 export NUGET_GITHUB_TOKEN=<token>
 ```
 
-## Build and run
+### Build and run
 
 ```bash
 dotnet build
 dotnet run --project src/ProtonDrive.Cli -- login
 dotnet run --project src/ProtonDrive.Cli -- whoami
-dotnet run --project src/ProtonDrive.Cli -- logout
 ```
 
-The executable is `src/ProtonDrive.Cli/bin/Debug/net10.0/protondrive`. Unit tests (sync planner, session
-refresh): `dotnet run --project tests/ProtonDrive.Sync.Tests`.
+The development build is `src/ProtonDrive.Cli/bin/Debug/net10.0/protondrive`.
 
-To install it for the systemd units below (needs the .NET 10 runtime):
+| Make target | What it does |
+| --- | --- |
+| `make` | Self-contained release build for this machine's architecture into `artifacts/protondrive-<version>-<rid>/` (`RID=linux-arm64` to choose) |
+| `sudo make install` / `sudo make uninstall` | Install or remove it system-wide (`PREFIX`, `DESTDIR`) |
+| `make dist` | Also pack the release archive `artifacts/protondrive-<version>-<rid>.tar.gz` |
+| `make test` | Run the unit tests (sync planner, session refresh) |
 
-```bash
-dotnet publish src/ProtonDrive.Cli -c Release -o ~/.local/share/protondrive
-ln -sf ~/.local/share/protondrive/protondrive ~/.local/bin/protondrive
-```
+### Releases
+
+Pushing a tag `v<version>` (matching `<Version>` in `Directory.Build.props`) runs
+`.github/workflows/release.yml`. It builds and tests x86-64 and ARM64 archives on Ubuntu 22.04, smoke-tests the
+installer, and publishes them with `SHA256SUMS` as a GitHub pre-release. For the workflow to read the `Proton.*`
+packages, each of the four packages must grant this repository read access (package settings, **Manage Actions
+access**).
 
 ### Projects
 
@@ -92,6 +156,7 @@ All namespaces start with `NSkyLabs.ProtonDrive`.
 | `sync remove <local-folder\|id>` | Stop syncing a folder; no files are changed |
 | `sync list`, `sync status` | Show synced folders, their last sync and whether a sync is running |
 | `sync [<local-folder\|id>] [--watch] [--dry-run] [--force] [--no-progress]` | Sync all folders (or one) once, or continuously |
+| `service enable [--timer]`, `service disable`, `service status` | Sync in the background as your own systemd user service, also after logging out |
 
 Remote paths are relative to My files: `Docs/2024` and `/Docs/2024` are the same.
 
@@ -159,14 +224,15 @@ folder, later passes fetch only the events since the last one. Local changes are
 sizes and modification times (no file content is read). With `--watch`, file system events trigger a pass a few
 seconds after changes settle, the events feed is polled every 30 seconds, and a full scan runs every 15 minutes.
 
-**Running it automatically.** Two passes on the same folder never overlap (a lock per folder), so `sync` can run
-from cron, a timer and by hand at the same time. User units for systemd are in `contrib/systemd/`:
+**Running it automatically.** `protondrive service enable` runs the sync as your own systemd user service (see
+[Background sync for each user](#background-sync-for-each-user)). The installed units are:
 
-- `protondrive-sync-watch.service`: runs `sync --watch` continuously.
-- `protondrive-sync.service` + `protondrive-sync.timer`: one pass every 15 minutes.
+- `protondrive-sync-watch.service`: runs `sync --watch` continuously (the default).
+- `protondrive-sync.service` + `protondrive-sync.timer`: one pass every 15 minutes (`--timer`).
 
-The install steps are in the comments at the top of each file. If the Proton session ends, the watch service
-exits with code 3 and stays stopped; run `protondrive login` and start it again.
+Two passes on the same folder never overlap (a lock per folder), so a sync started by hand or from cron while the
+service runs is safe. If the Proton session ends, the watch service exits with code 3 and stays stopped; run
+`protondrive login`, then `protondrive service enable` again.
 
 **Not synced:** symbolic links, special files, names that are not valid on this system, Proton Docs and Sheets
 (they have no file content), and editor lock and swap files (`.~lock.*#`, `~$*`, `.*.swp`), `.DS_Store`,

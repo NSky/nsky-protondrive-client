@@ -1,0 +1,93 @@
+name: Release
+
+# Builds self-contained Linux binaries and, for a v* tag, publishes them as a GitHub release:
+#   protondrive-<version>-linux-x64.tar.gz, protondrive-<version>-linux-arm64.tar.gz, SHA256SUMS
+# Each archive holds the program, the systemd user units, README, LICENSE and install.sh.
+#
+# The Proton.* packages come from this owner's GitHub Packages feed. GITHUB_TOKEN can read them only if each
+# package (Proton.Sdk, Proton.Drive.Sdk, Proton.Drive.Sdk.Account, Proton.Cryptography) grants this repository
+# access: package settings > Manage Actions access > add this repository with the Read role.
+
+on:
+  push:
+    tags: ["v*"]
+  workflow_dispatch:
+
+permissions:
+  contents: write
+  packages: read
+
+jobs:
+  build:
+    strategy:
+      matrix:
+        include:
+          # Ubuntu 22.04 (glibc 2.35) as the oldest supported base; the binaries need glibc 2.34 or newer.
+          - rid: linux-x64
+            runner: ubuntu-22.04
+          - rid: linux-arm64
+            runner: ubuntu-22.04-arm
+    runs-on: ${{ matrix.runner }}
+    env:
+      DOTNET_NOLOGO: true
+      NUGET_GITHUB_USER: ${{ github.repository_owner }}
+      NUGET_GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-dotnet@v4
+        with:
+          dotnet-version: 10.0.x
+
+      - name: Check that the tag matches the version
+        if: startsWith(github.ref, 'refs/tags/v')
+        run: |
+          version=$(sed -n 's:.*<Version>\(.*\)</Version>.*:\1:p' Directory.Build.props)
+          if [ "v$version" != "$GITHUB_REF_NAME" ]; then
+            echo "::error::Tag $GITHUB_REF_NAME does not match <Version>$version</Version> in Directory.Build.props"
+            exit 1
+          fi
+
+      - name: Test
+        run: make test
+
+      - name: Build archive
+        run: make dist RID=${{ matrix.rid }}
+
+      - name: Smoke-test the installer
+        run: |
+          dir=$(ls -d artifacts/protondrive-*-${{ matrix.rid }})
+          sudo sh "$dir/install.sh"
+          protondrive version
+          test -f /usr/local/lib/systemd/user/protondrive-sync-watch.service
+          sudo sh "$dir/install.sh" --uninstall
+          test ! -e /usr/local/bin/protondrive
+
+      - uses: actions/upload-artifact@v4
+        with:
+          name: protondrive-${{ matrix.rid }}
+          path: artifacts/*.tar.gz
+          if-no-files-found: error
+
+  release:
+    needs: build
+    if: startsWith(github.ref, 'refs/tags/v')
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/download-artifact@v4
+        with:
+          path: dist
+          merge-multiple: true
+
+      - name: Checksums
+        run: cd dist && sha256sum *.tar.gz > SHA256SUMS
+
+      - name: Publish the release
+        env:
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+        run: |
+          gh release create "$GITHUB_REF_NAME" dist/* \
+            --repo "$GITHUB_REPOSITORY" \
+            --title "protondrive ${GITHUB_REF_NAME#v}" \
+            --prerelease \
+            --notes "Alpha release, provided as is, without warranty. Unofficial; not affiliated with Proton AG. See the README's Install section and Disclaimer."

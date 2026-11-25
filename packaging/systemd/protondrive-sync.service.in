@@ -1,0 +1,10 @@
+# One sync pass over the user's synced folders ("protondrive sync"), started by protondrive-sync.timer.
+# Installed system-wide as a user unit; enable the timer for yourself with: protondrive service enable --timer
+
+[Unit]
+Description=Proton Drive sync (one pass)
+Documentation=file://@DOCDIR@/README.md
+
+[Service]
+Type=oneshot
+ExecStart=@BINDIR@/protondrive sync --no-progress

@@ -1,5 +1,6 @@
 using System.Runtime.InteropServices;
 using NSkyLabs.ProtonDrive.Cli.Drive;
+using NSkyLabs.ProtonDrive.Cli.Service;
 using NSkyLabs.ProtonDrive.Cli.Sync;
 using NSkyLabs.ProtonDrive.Cli.Terminal;
 using NSkyLabs.ProtonDrive.Sync;
@@ -19,7 +20,8 @@ using var sigterm = PosixSignalRegistration.Create(PosixSignal.SIGTERM, context 
     cts.Cancel();
 });
 
-var auth = new AuthService(new SessionStore(AppInfo.ConfigDirectory));
+var sessionStore = new SessionStore(AppInfo.ConfigDirectory);
+var auth = new AuthService(sessionStore);
 var command = args.Length > 0 ? args[0] : "help";
 
 try
@@ -121,6 +123,9 @@ try
         case "sync":
             return await SyncCommand.RunAsync(auth, args[1..], cts.Token);
 
+        case "service":
+            return ServiceCommand.Run(args[1..], sessionStore);
+
         case "version":
         case "--version":
             Console.WriteLine($"{AppInfo.CommandName} {AppInfo.Version} ({AppInfo.ProtonAppVersion})");
@@ -142,6 +147,12 @@ try
 catch (NotLoggedInException ex)
 {
     Console.Error.WriteLine(ex.Message);
+    return 1;
+}
+catch (ServiceException ex)
+{
+    Console.Error.WriteLine(ex.Message);
+    Console.Error.WriteLine(ServiceCommand.Usage);
     return 1;
 }
 catch (SyncUsageException ex)
@@ -229,6 +240,9 @@ static void PrintHelp()
           sync [<local-folder|id>] [--watch] [--dry-run] [--force] [--no-progress]
                                         Sync all folders (or one) once, or keep syncing with --watch.
                                         --dry-run shows the plan; --force skips the safety checks
+          service enable [--timer] | disable | status
+                                        Sync in the background as a systemd user service, also after
+                                        logging out (continuously, or every 15 minutes with --timer)
           version                       Print version information
           help                          Show this help
 

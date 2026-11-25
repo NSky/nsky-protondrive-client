@@ -1,0 +1,21 @@
+# Keeps the user's synced folders in sync continuously: "protondrive sync --watch".
+#
+# Installed system-wide as a *user* unit: each user runs their own instance, with their own login, settings and
+# state in their home folder. Enable it for yourself (this also keeps it running after you log out):
+#   protondrive service enable
+# Logs: journalctl --user -u protondrive-sync-watch -f
+
+[Unit]
+Description=Proton Drive sync (watch mode)
+Documentation=file://@DOCDIR@/README.md
+
+[Service]
+Type=simple
+ExecStart=@BINDIR@/protondrive sync --watch --no-progress
+Restart=on-failure
+RestartSec=60
+# Exit code 3: the Proton session has ended. Run 'protondrive login', then 'protondrive service enable' again.
+RestartPreventExitStatus=3
+
+[Install]
+WantedBy=default.target
