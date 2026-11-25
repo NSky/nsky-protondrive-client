@@ -11,6 +11,19 @@ folders.
 > damage to your account or other harm resulting from its use. The sync feature changes and deletes files on
 > both sides: keep independent backups of anything important. See [Disclaimer](#disclaimer).
 
+## What it is, and what it isn't
+
+- **Not an rclone wrapper, and not a reverse-engineered client.** It does not re-implement Proton's API or
+  encryption.
+- **Built on Proton's own open-source libraries:** the [Proton Drive SDK](https://github.com/ProtonDriveApps/sdk)
+  and Proton's [cryptography library](https://github.com/ProtonDriveApps/dotnet-crypto). Login, keys,
+  encryption and API calls all go through Proton's code; this project adds the command line and the sync
+  engine. Proton does not publish these libraries on nuget.org, so the packages are built from forks of their
+  repositories (see [Proton packages](#proton-packages)).
+- **Sync follows the Drive events feed.** After the first sync, it asks Drive what changed since the last pass
+  instead of walking the whole remote folder tree each time. That keeps it fast, and light on the API, with
+  large folders. See [Finding changes](#sync).
+
 ## Status
 
 | Feature | State |
