@@ -14,7 +14,7 @@
     <ImplicitUsings>enable</ImplicitUsings>
     <Deterministic>true</Deterministic>
 
-    <Version>0.2.1</Version>
+    <Version>0.2.2</Version>
     <Authors>NSky Labs</Authors>
     <Product>nsky-protondrive-client</Product>
     <Description>Unofficial, alpha-quality Proton Drive command-line client with folder sync. Not affiliated with Proton AG. Provided as is, without warranty.</Description>
