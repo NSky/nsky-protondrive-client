@@ -278,6 +278,14 @@ internal static class SyncCommand
             Console.WriteLine($"    last sync:   {finished} ({state.GetMeta("last_pass_result") ?? "no result"})");
             Console.WriteLine($"    synced items: {state.CountBase()}");
 
+            if (state.GetMeta(SyncEngine.HeldDeletionsKey) is { } heldText && int.TryParse(heldText, CultureInfo.InvariantCulture, out var held) && held > 0)
+            {
+                Console.WriteLine(state.GetMeta(SyncEngine.HeldSideKey) == "local"
+                    ? $"    The remote folder is empty: {held} local item(s) are kept and syncing is paused until you restore them on Proton Drive or confirm their deletion."
+                    : $"    {held} item(s) deleted locally are waiting for confirmation before being deleted on Proton Drive.");
+                Console.WriteLine($"    Review with '{AppInfo.CommandName} sync --dry-run {pair.LocalPath}', confirm with '{AppInfo.CommandName} sync --force {pair.LocalPath}'.");
+            }
+
             using var probe = Core.IO.FileLock.TryAcquire(pair.LockPath);
             if (probe is null)
             {
@@ -318,7 +326,8 @@ internal static class SyncCommand
             try
             {
                 var result = await engine.RunAsync(pair, options, cancellationToken).ConfigureAwait(false);
-                if (result.Outcome == SyncPassOutcome.Refused || result.Failed > 0)
+                // Held deletions need the user's attention, so cron and the timer unit report them as a failure.
+                if (result.Outcome == SyncPassOutcome.Refused || result.Failed > 0 || result.HeldDeletions > 0)
                 {
                     exitCode = 1;
                 }

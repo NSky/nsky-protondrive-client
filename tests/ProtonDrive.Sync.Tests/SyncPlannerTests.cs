@@ -151,7 +151,8 @@ public sealed class SyncPlannerTests
         var plan = Plan();
 
         Assert.Equal([(TrashLocal, "docs")], Kinds(plan));
-        Assert.Equal(4, plan.DeletedItemCount);
+        Assert.Equal(4, plan.LocalDeletedItemCount);
+        Assert.Equal(0, plan.RemoteDeletedItemCount);
     }
 
     [Fact]
@@ -241,7 +242,8 @@ public sealed class SyncPlannerTests
 
         var plan = Plan();
 
-        Assert.Equal(2, plan.DeletedItemCount);
+        Assert.Equal(2, plan.RemoteDeletedItemCount);
+        Assert.Equal(0, plan.LocalDeletedItemCount);
         Assert.Equal(3, plan.BaseItemCount);
     }
 

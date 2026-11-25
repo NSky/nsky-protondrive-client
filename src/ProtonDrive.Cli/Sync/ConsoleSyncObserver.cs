@@ -11,10 +11,66 @@ internal sealed class ConsoleSyncObserver(bool showProgress, bool quietWhenUpToD
 {
     private readonly ConcurrentDictionary<SyncAction, TransferProgress.FileTransfer> _transfers = new();
     private readonly ConcurrentDictionary<string, bool> _shownWarnings = new(StringComparer.Ordinal);
+    private readonly ConcurrentDictionary<string, string> _shownHeld = new(StringComparer.Ordinal);
+    private readonly ConcurrentDictionary<string, bool> _heldLocally = new(StringComparer.Ordinal);
     private TransferProgress? _progress;
+    private bool _heldShownThisPass;
+
+    private const int MaxHeldShown = 20;
 
     public void PassStarted(SyncPair pair)
     {
+        _heldShownThisPass = false;
+    }
+
+    public void DeletionsHeld(SyncPair pair, SafetyDecision decision)
+    {
+        var held = decision.HeldDeletions;
+        _heldLocally[pair.Id] = !decision.HeldOnServer;
+
+        // Watch mode plans again on every change; show the same pending deletions only once.
+        var key = string.Join('\n', held.Select(a => a.Kind + " " + a.Path));
+        if (quietWhenUpToDate && _shownHeld.TryGetValue(pair.Id, out var shown) && shown == key)
+        {
+            return;
+        }
+
+        _shownHeld[pair.Id] = key;
+        _heldShownThisPass = true;
+
+        if (decision.HeldOnServer)
+        {
+            Console.Error.WriteLine($"Warning: {Describe(pair)}: not deleting on Proton Drive yet. {decision.HeldReason}");
+            Console.Error.WriteLine("Because that many deletions could be an accident, these wait for your confirmation (everything else keeps syncing):");
+        }
+        else
+        {
+            Console.Error.WriteLine($"Warning: {Describe(pair)}: not deleting local files. {decision.HeldReason}");
+            Console.Error.WriteLine("This could be an accident, so the local copies are kept, and nothing is synced for this folder until you restore or confirm:");
+        }
+
+        foreach (var action in held.Take(MaxHeldShown))
+        {
+            var isFolder = action.Local?.IsFolder ?? action.Remote?.IsFolder ?? action.Base?.IsFolder ?? false;
+            var path = decision.HeldOnServer ? RemotePathOf(pair, action.Path) : Path.Combine(pair.LocalPath, action.Path);
+            Console.Error.WriteLine($"  {path}{(isFolder ? "/ (folder)" : string.Empty)}");
+        }
+
+        if (held.Count > MaxHeldShown)
+        {
+            Console.Error.WriteLine($"  ... and {held.Count - MaxHeldShown} more");
+        }
+
+        if (decision.HeldOnServer)
+        {
+            Console.Error.WriteLine($"To delete them on Proton Drive too (they go to its trash): {AppInfo.CommandName} sync --force {pair.LocalPath}");
+            Console.Error.WriteLine($"To get them back locally instead, download them again, e.g. {AppInfo.CommandName} download <remote-path> <local-folder>");
+        }
+        else
+        {
+            Console.Error.WriteLine($"If they were deleted on Proton Drive on purpose, move the local copies to the local trash with: {AppInfo.CommandName} sync --force {pair.LocalPath}");
+            Console.Error.WriteLine("If not, restore them from the Proton Drive trash (web app); syncing then resumes by itself.");
+        }
     }
 
     public void Warning(SyncPair pair, string message)
@@ -98,14 +154,21 @@ internal sealed class ConsoleSyncObserver(bool showProgress, bool quietWhenUpToD
 
         switch (result.Outcome)
         {
-            case SyncPassOutcome.UpToDate when !quietWhenUpToDate:
+            case SyncPassOutcome.UpToDate when result.HeldDeletions > 0 && (!quietWhenUpToDate || _heldShownThisPass):
+                Console.Error.WriteLine(_heldLocally.TryGetValue(pair.Id, out var local) && local
+                    ? $"{Describe(pair)}: paused, the remote folder is empty ({result.HeldDeletions} local item(s) kept)"
+                    : $"{Describe(pair)}: up to date, except {result.HeldDeletions} deletion(s) waiting for confirmation");
+                break;
+
+            case SyncPassOutcome.UpToDate when !quietWhenUpToDate && result.HeldDeletions == 0:
                 Console.Error.WriteLine($"{Describe(pair)}: up to date");
                 break;
 
             case SyncPassOutcome.Completed:
+                var held = result.HeldDeletions > 0 ? $"; {result.HeldDeletions} deletion(s) waiting for confirmation" : string.Empty;
                 Console.Error.WriteLine(result.Failed == 0
-                    ? $"{Describe(pair)}: synced ({result.Succeeded} change(s))"
-                    : $"{Describe(pair)}: {result.Succeeded} change(s) done, {result.Failed} failed or skipped (retried on the next run)");
+                    ? $"{Describe(pair)}: synced ({result.Succeeded} change(s)){held}"
+                    : $"{Describe(pair)}: {result.Succeeded} change(s) done, {result.Failed} failed or skipped (retried on the next run){held}");
                 break;
 
             case SyncPassOutcome.DryRun:
@@ -124,6 +187,8 @@ internal sealed class ConsoleSyncObserver(bool showProgress, bool quietWhenUpToD
     }
 
     public static string Describe(SyncPair pair) => $"{pair.LocalPath} ⇄ {pair.RemotePath}";
+
+    private static string RemotePathOf(SyncPair pair, string path) => pair.RemotePath.TrimEnd('/') + "/" + path;
 
     private void Write(string line)
     {

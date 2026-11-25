@@ -7,6 +7,12 @@ internal interface ISyncObserver
 
     void Warning(SyncPair pair, string message);
 
+    /// <summary>
+    /// Deletions that look like an accident were held back (see <see cref="SyncSafety"/>); they wait for
+    /// <c>sync --force</c>. Called before <see cref="PlanReady"/>, on every pass while they are pending.
+    /// </summary>
+    void DeletionsHeld(SyncPair pair, SafetyDecision decision);
+
     /// <summary>A plan was made. Not called when there is nothing to do.</summary>
     void PlanReady(SyncPair pair, SyncPlan plan, bool dryRun);
 
@@ -34,8 +40,9 @@ internal enum SyncPassOutcome
     /// <summary>Another process is syncing this pair.</summary>
     Busy,
 
-    /// <summary>The plan was refused by a safety check; nothing was changed.</summary>
+    /// <summary>The plan was refused by a safety check (one side suddenly empty); nothing was changed.</summary>
     Refused,
 }
 
-internal sealed record SyncPassResult(SyncPassOutcome Outcome, int Succeeded = 0, int Failed = 0, string? Message = null);
+/// <param name="HeldDeletions">Synced items whose deletion (on either side) waits for --force.</param>
+internal sealed record SyncPassResult(SyncPassOutcome Outcome, int Succeeded = 0, int Failed = 0, string? Message = null, int HeldDeletions = 0);

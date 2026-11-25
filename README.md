@@ -231,9 +231,26 @@ side changed:
 `<synced folder>/.protondrive/trash/<date>/`. A local file is replaced by a download only if it is still
 unchanged since the scan; if it changed meanwhile, it is left alone and synced on the next pass.
 
-**Safety checks.** A pass is refused, and nothing is changed, when the local or remote folder is suddenly empty
-although items were synced before (for example an unmounted disk), or when it would delete more than half of
-the synced items (and more than 10). `--force` overrides the checks. A missing local folder is never re-created.
+**Safety checks.** Proton Drive is the reference copy: the local folder follows it, but local accidents must not
+spread to it.
+
+- **Deletions on Proton Drive** are applied locally without confirmation, however many there are, unless they
+  leave the remote folder empty (see below). The local copies go to the local trash folder.
+- **Deletions in the local folder** are applied on Proton Drive unless they look like an accident: more than 10
+  items and more than half of everything synced. Those deletions are then *held back* and everything else keeps
+  syncing. The held items are listed in the output and the journal, and `protondrive sync status` shows how many
+  are waiting. Confirm them with `protondrive sync --force <folder>` (they go to the Proton Drive trash). To get
+  them back locally instead, download them again with `protondrive download`. While deletions are held, a
+  one-shot `protondrive sync` exits with code 1, so cron and the timer unit report it.
+- **The remote folder suddenly empty** although items were synced before (emptied by mistake, a failed scan):
+  the local files are kept and the folder is paused. Nothing is uploaded either, because a new upload would make
+  the remote folder look non-empty and the next pass would then delete the local files without asking. A warning
+  lists the kept items, and `protondrive sync status` shows the pause. Syncing resumes by itself once you restore
+  the items from the Proton Drive trash; if they were deleted on purpose, run `protondrive sync --force <folder>`
+  to move the local copies to the local trash.
+- **The local folder suddenly empty** although items were synced before (an unmounted disk, a failed scan):
+  nothing is synced at all until `--force`.
+- A missing local folder is never re-created.
 
 **Finding changes.** Remote changes come from the Drive events feed: the first pass lists the whole remote
 folder, later passes fetch only the events since the last one. Local changes are found by a scan of names,

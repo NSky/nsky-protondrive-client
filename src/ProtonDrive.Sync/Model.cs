@@ -73,6 +73,12 @@ internal sealed record SyncAction(SyncActionKind Kind, string Path)
 
     public bool IsDownload => Kind is SyncActionKind.Download;
 
+    /// <summary>Deletes on the server (a local deletion being applied there).</summary>
+    public bool IsRemoteDeletion => Kind is SyncActionKind.TrashRemote or SyncActionKind.TrashRemoteEarly;
+
+    /// <summary>Deletes locally (a deletion on the server being applied here).</summary>
+    public bool IsLocalDeletion => Kind is SyncActionKind.TrashLocal or SyncActionKind.TrashLocalEarly;
+
     public long TransferSize => Kind switch
     {
         SyncActionKind.Download => Remote?.Size ?? 0,
@@ -97,8 +103,11 @@ internal sealed class SyncPlan
 {
     public required IReadOnlyList<SyncAction> Actions { get; init; }
 
-    /// <summary>Number of synced items (from the base) that this plan deletes on either side, including folder contents.</summary>
-    public required int DeletedItemCount { get; init; }
+    /// <summary>Synced items (from the base) this plan deletes locally, including folder contents.</summary>
+    public required int LocalDeletedItemCount { get; init; }
+
+    /// <summary>Synced items (from the base) this plan deletes on the server, including folder contents.</summary>
+    public required int RemoteDeletedItemCount { get; init; }
 
     /// <summary>Number of items in the base when the plan was made.</summary>
     public required int BaseItemCount { get; init; }
@@ -106,4 +115,20 @@ internal sealed class SyncPlan
     public bool IsEmpty => Actions.Count == 0;
 
     public int Count(SyncActionKind kind) => Actions.Count(a => a.Kind == kind);
+
+    /// <summary>The same plan without <paramref name="removed"/>; their deletions no longer count.</summary>
+    public SyncPlan Without(IReadOnlyCollection<SyncAction> removed)
+    {
+        var remaining = Actions.Where(a => !removed.Contains(a)).ToList();
+        var removedLocal = removed.Any(a => a.IsLocalDeletion);
+        var removedRemote = removed.Any(a => a.IsRemoteDeletion);
+
+        return new SyncPlan
+        {
+            Actions = remaining,
+            LocalDeletedItemCount = removedLocal && !remaining.Any(a => a.IsLocalDeletion) ? 0 : LocalDeletedItemCount,
+            RemoteDeletedItemCount = removedRemote && !remaining.Any(a => a.IsRemoteDeletion) ? 0 : RemoteDeletedItemCount,
+            BaseItemCount = BaseItemCount,
+        };
+    }
 }

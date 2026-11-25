@@ -51,12 +51,9 @@ internal static class SyncPlanner
 
         actions.AddRange(decisions.Values.SelectMany(a => a));
 
-        var deleted = actions.Sum(a => a.Kind switch
-        {
-            SyncActionKind.TrashLocal or SyncActionKind.TrashRemote or SyncActionKind.TrashLocalEarly or SyncActionKind.TrashRemoteEarly
-                => baseMap.Keys.Count(p => SyncPaths.IsSameOrUnder(p, a.Path)),
-            _ => 0,
-        });
+        int CountDeleted(Func<SyncAction, bool> side) => actions
+            .Where(side)
+            .Sum(a => baseMap.Keys.Count(p => SyncPaths.IsSameOrUnder(p, a.Path)));
 
         // Stable sort: moves keep their shallow-first order; within a phase, paths sort parents first.
         var ordered = actions
@@ -67,7 +64,13 @@ internal static class SyncPlanner
             .Select(x => x.action)
             .ToList();
 
-        return new SyncPlan { Actions = ordered, DeletedItemCount = deleted, BaseItemCount = baseItems.Count };
+        return new SyncPlan
+        {
+            Actions = ordered,
+            LocalDeletedItemCount = CountDeleted(a => a.IsLocalDeletion),
+            RemoteDeletedItemCount = CountDeleted(a => a.IsRemoteDeletion),
+            BaseItemCount = baseItems.Count,
+        };
     }
 
     /// <summary>

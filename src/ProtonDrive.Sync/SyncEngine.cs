@@ -25,14 +25,14 @@ internal sealed record SyncPassOptions
 /// </summary>
 internal sealed class SyncEngine(ProtonDriveClient client, ISyncObserver observer)
 {
-    /// <summary>Plans that would delete more than this share of the synced items are refused without --force.</summary>
-    private const double MaxDeletedShare = 0.5;
-
-    /// <summary>Deletions up to this many items are always allowed, whatever their share.</summary>
-    private const int DeletionsAlwaysAllowed = 10;
-
     /// <summary>Conflict renames need one more pass to finish; this bounds how many follow-up passes run.</summary>
     private const int MaxPassesPerRun = 3;
+
+    /// <summary>State key: server deletions held back by the last pass (shown by 'sync status').</summary>
+    public const string HeldDeletionsKey = "held_deletions";
+
+    /// <summary>State key: "server" or "local", the side where the held deletions would happen.</summary>
+    public const string HeldSideKey = "held_side";
 
     private readonly IgnoreRules _ignoreRules = IgnoreRules.Default;
 
@@ -59,8 +59,9 @@ internal sealed class SyncEngine(ProtonDriveClient client, ISyncObserver observe
 
             succeeded += outcome.Succeeded;
             failed += outcome.Failed;
+            // Each pass plans from scratch, so the last pass's held deletions are the current ones.
             result = outcome.Outcome == SyncPassOutcome.UpToDate && pass > 1
-                ? new SyncPassResult(SyncPassOutcome.Completed, succeeded, failed)
+                ? new SyncPassResult(SyncPassOutcome.Completed, succeeded, failed, HeldDeletions: outcome.HeldDeletions)
                 : outcome with { Succeeded = succeeded, Failed = failed };
 
             if (!needsAnotherPass || options.DryRun)
@@ -71,6 +72,11 @@ internal sealed class SyncEngine(ProtonDriveClient client, ISyncObserver observe
 
         state.SetMeta("last_pass_finished", DateTimeOffset.UtcNow.ToString("O", CultureInfo.InvariantCulture));
         state.SetMeta("last_pass_result", Describe(result));
+        if (result.Outcome is SyncPassOutcome.UpToDate or SyncPassOutcome.Completed)
+        {
+            state.SetMeta(HeldDeletionsKey, result.HeldDeletions.ToString(CultureInfo.InvariantCulture));
+        }
+
         observer.PassFinished(pair, result);
         return result;
     }
@@ -128,46 +134,40 @@ internal sealed class SyncEngine(ProtonDriveClient client, ISyncObserver observe
             return (new SyncPassResult(SyncPassOutcome.UpToDate), false);
         }
 
-        if (!options.Force && CheckSafety(plan, local.Items.Count, remote.Items.Count) is { } refusal)
+        var decision = options.Force
+            ? SafetyDecision.Allow(plan)
+            : SyncSafety.Check(plan, local.Items.Count, remote.Items.Count);
+
+        if (decision.Refusal is { } refusal)
         {
             observer.PlanReady(pair, plan, dryRun: true);
             return (new SyncPassResult(SyncPassOutcome.Refused, Message: refusal), false);
         }
 
-        observer.PlanReady(pair, plan, options.DryRun);
+        var held = decision.HeldItemCount;
+        if (decision.HeldDeletions.Count > 0)
+        {
+            observer.DeletionsHeld(pair, decision);
+        }
+
+        state.SetMeta(HeldSideKey, decision.HeldDeletions.Count == 0 ? null : decision.HeldOnServer ? "server" : "local");
+
+        var runnable = decision.Plan;
+        if (runnable.IsEmpty)
+        {
+            return (new SyncPassResult(SyncPassOutcome.UpToDate, HeldDeletions: held), false);
+        }
+
+        observer.PlanReady(pair, runnable, options.DryRun);
         if (options.DryRun)
         {
-            return (new SyncPassResult(SyncPassOutcome.DryRun), false);
+            return (new SyncPassResult(SyncPassOutcome.DryRun, HeldDeletions: held), false);
         }
 
         var executor = new SyncExecutor(client, pair, state, observer, remote);
-        var (succeeded, failed) = await executor.ExecuteAsync(plan, cancellationToken).ConfigureAwait(false);
+        var (succeeded, failed) = await executor.ExecuteAsync(runnable, cancellationToken).ConfigureAwait(false);
 
-        return (new SyncPassResult(SyncPassOutcome.Completed, succeeded, failed), executor.NeedsAnotherPass);
-    }
-
-    /// <summary>
-    /// Refuses plans that look like an accident rather than a user's intent: one side suddenly empty, or a large
-    /// share of everything synced being deleted.
-    /// </summary>
-    private static string? CheckSafety(SyncPlan plan, int localCount, int remoteCount)
-    {
-        if (plan.BaseItemCount > 0 && localCount == 0)
-        {
-            return $"The local folder is empty, but {plan.BaseItemCount} items were synced before. Syncing now would delete them on the server.";
-        }
-
-        if (plan.BaseItemCount > 0 && remoteCount == 0)
-        {
-            return $"The remote folder is empty, but {plan.BaseItemCount} items were synced before. Syncing now would delete them locally.";
-        }
-
-        if (plan.DeletedItemCount > DeletionsAlwaysAllowed && plan.DeletedItemCount > plan.BaseItemCount * MaxDeletedShare)
-        {
-            return $"This sync would delete {plan.DeletedItemCount} of {plan.BaseItemCount} synced items.";
-        }
-
-        return null;
+        return (new SyncPassResult(SyncPassOutcome.Completed, succeeded, failed, HeldDeletions: held), executor.NeedsAnotherPass);
     }
 
     private static Dictionary<string, T> Without<T>(IReadOnlyDictionary<string, T> items, IReadOnlyList<string> excluded)
@@ -177,12 +177,12 @@ internal sealed class SyncEngine(ProtonDriveClient client, ISyncObserver observe
             : items.Where(x => !excluded.Any(e => SyncPaths.IsSameOrUnder(x.Key, e))).ToDictionary(x => x.Key, x => x.Value, StringComparer.Ordinal);
     }
 
-    private static string Describe(SyncPassResult result) => result.Outcome switch
+    private static string Describe(SyncPassResult result) => (result.Outcome switch
     {
         SyncPassOutcome.Completed => $"completed: {result.Succeeded} done, {result.Failed} failed",
         SyncPassOutcome.Refused => $"refused: {result.Message}",
         SyncPassOutcome.UpToDate => "up to date",
         SyncPassOutcome.DryRun => "dry run",
         _ => result.Outcome.ToString().ToLowerInvariant(),
-    };
+    }) + (result.HeldDeletions > 0 ? $"; {result.HeldDeletions} deletion(s) held back" : string.Empty);
 }
