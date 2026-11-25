@@ -285,6 +285,11 @@ internal static class SyncCommand
                 : "never";
 
             Console.WriteLine($"    last sync:   {finished} ({state.GetMeta("last_pass_result") ?? "no result"})");
+            if (state.GetMeta(SyncEngine.LastCheckedKey) is { } checkedText)
+            {
+                var lastChecked = DateTimeOffset.Parse(checkedText, CultureInfo.InvariantCulture).ToLocalTime();
+                Console.WriteLine($"    last checked: {lastChecked.ToString("yyyy-MM-dd HH:mm:ss", CultureInfo.InvariantCulture)}");
+            }
             Console.WriteLine($"    synced items: {state.CountBase()}");
 
             if (state.GetMeta(SyncEngine.HeldDeletionsKey) is { } heldText && int.TryParse(heldText, CultureInfo.InvariantCulture, out var held) && held > 0)

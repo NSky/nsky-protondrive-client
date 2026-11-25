@@ -31,6 +31,12 @@ internal enum SyncPassOutcome
     /// <summary>Nothing changed on either side.</summary>
     UpToDate,
 
+    /// <summary>
+    /// A quick check in watch mode: the server reported no changes and there were no local file events, so the
+    /// folders were not compared. Says nothing about held deletions or other problems found by earlier passes.
+    /// </summary>
+    NotChecked,
+
     /// <summary>The plan was carried out (some actions may have failed; see the counts).</summary>
     Completed,
 

@@ -24,6 +24,19 @@ internal enum AttentionKind
     SessionEnded,
 }
 
+/// <summary>What a finished pass may do to a folder's notice.</summary>
+internal enum AttentionUpdate
+{
+    /// <summary>Leave the notice as it is.</summary>
+    Keep,
+
+    /// <summary>Remove the notice.</summary>
+    Clear,
+
+    /// <summary>The folders were compared: raise the notice the result calls for, or clear it if there is none.</summary>
+    Evaluate,
+}
+
 /// <summary>A problem with a synced folder that the user has to act on.</summary>
 /// <param name="Summary">One line, shown at login, in notifications and in the systemd status.</param>
 /// <param name="Details">The full explanation and what to do, written to the notice file.</param>
@@ -60,6 +73,23 @@ internal sealed class SyncAttention(Action<SyncPair, AttentionNotice?>? changed 
     public static string SummaryPath(SyncPair pair) => Path.Combine(SummaryDirectory, pair.Id);
 
     public static string NoticePath(SyncPair pair) => Path.Combine(pair.LocalPath, NoticeFileName);
+
+    /// <summary>
+    /// Decides what a pass that ended with <paramref name="outcome"/> may do to the current notice.
+    /// </summary>
+    /// <remarks>
+    /// Only a pass that compared both sides can tell whether held deletions, a paused folder or an empty local folder
+    /// are still there. A quick check that skipped the comparison only proves that the folders are reachable, the
+    /// session works and the server answers, so it may clear only the problems that this disproves.
+    /// </remarks>
+    public static AttentionUpdate DecideUpdate(SyncPassOutcome outcome, AttentionKind? current) => outcome switch
+    {
+        SyncPassOutcome.Busy or SyncPassOutcome.DryRun => AttentionUpdate.Keep,
+        SyncPassOutcome.NotChecked => current is AttentionKind.Failing or AttentionKind.SessionEnded or AttentionKind.FolderUnavailable
+            ? AttentionUpdate.Clear
+            : AttentionUpdate.Keep,
+        _ => AttentionUpdate.Evaluate,
+    };
 
     /// <summary>The current summary line of a folder, or <see langword="null"/> if it is fine.</summary>
     public static string? GetSummary(SyncPair pair)

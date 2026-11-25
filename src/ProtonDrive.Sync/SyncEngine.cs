@@ -42,6 +42,11 @@ internal sealed class SyncEngine(ProtonDriveClient client, ISyncObserver observe
     /// <summary>State key: "server" or "local", the side where the held deletions would happen.</summary>
     public const string HeldSideKey = "held_side";
 
+    /// <summary>State key: when the server was last checked, including quick checks that compared nothing.</summary>
+    public const string LastCheckedKey = "last_checked";
+
+    private const string AttentionKindKey = "attention_kind";
+
     private readonly IgnoreRules _ignoreRules = IgnoreRules.Default;
 
     public async Task<SyncPassResult> RunAsync(SyncPair pair, SyncPassOptions options, CancellationToken cancellationToken)
@@ -93,11 +98,18 @@ internal sealed class SyncEngine(ProtonDriveClient client, ISyncObserver observe
             }
         }
 
-        state.SetMeta("last_pass_finished", DateTimeOffset.UtcNow.ToString("O", CultureInfo.InvariantCulture));
-        state.SetMeta("last_pass_result", Describe(result));
-        if (result.Outcome is SyncPassOutcome.UpToDate or SyncPassOutcome.Completed)
+        var now = DateTimeOffset.UtcNow.ToString("O", CultureInfo.InvariantCulture);
+        state.SetMeta(LastCheckedKey, now);
+
+        // A quick check that compared nothing keeps the last real result, including the held deletions.
+        if (result.Outcome != SyncPassOutcome.NotChecked)
         {
-            state.SetMeta(HeldDeletionsKey, result.HeldDeletions.ToString(CultureInfo.InvariantCulture));
+            state.SetMeta("last_pass_finished", now);
+            state.SetMeta("last_pass_result", Describe(result));
+            if (result.Outcome is SyncPassOutcome.UpToDate or SyncPassOutcome.Completed)
+            {
+                state.SetMeta(HeldDeletionsKey, result.HeldDeletions.ToString(CultureInfo.InvariantCulture));
+            }
         }
 
         observer.PassFinished(pair, result);
@@ -124,7 +136,8 @@ internal sealed class SyncEngine(ProtonDriveClient client, ISyncObserver observe
 
         if (!options.LocalMayHaveChanged && !refresh.HasChanges)
         {
-            return (new SyncPassResult(SyncPassOutcome.UpToDate), false);
+            // Nothing was compared, so this must not be taken for "up to date" (see SyncAttention.DecideUpdate).
+            return (new SyncPassResult(SyncPassOutcome.NotChecked), false);
         }
 
         var remote = remoteTree.GetSnapshot(_ignoreRules);
@@ -196,13 +209,26 @@ internal sealed class SyncEngine(ProtonDriveClient client, ISyncObserver observe
     /// <summary>Raises or clears the folder's notice after a pass that ran to the end.</summary>
     private void UpdateAttention(SyncPair pair, SyncStateStore state, SyncPassResult result)
     {
-        if (result.Outcome is SyncPassOutcome.Busy or SyncPassOutcome.DryRun)
+        var current = Enum.TryParse<AttentionKind>(state.GetMeta(AttentionKindKey), out var kind) ? kind : (AttentionKind?)null;
+        var update = SyncAttention.DecideUpdate(result.Outcome, current);
+
+        if (result.Outcome is not (SyncPassOutcome.Busy or SyncPassOutcome.DryRun))
+        {
+            // The server answered, so the failure streak is over.
+            state.SetMeta(FailureCountKey, null);
+            state.SetMeta(FirstFailureKey, null);
+        }
+
+        if (update == AttentionUpdate.Keep)
         {
             return;
         }
 
-        state.SetMeta(FailureCountKey, null);
-        state.SetMeta(FirstFailureKey, null);
+        if (update == AttentionUpdate.Clear)
+        {
+            ClearAttention(pair, state);
+            return;
+        }
 
         var notice = result switch
         {
@@ -254,12 +280,24 @@ internal sealed class SyncEngine(ProtonDriveClient client, ISyncObserver observe
 
         if (notice is null)
         {
-            attention.Clear(pair);
+            ClearAttention(pair, state);
         }
         else
         {
-            attention.Raise(pair, notice);
+            RaiseAttention(pair, state, notice);
         }
+    }
+
+    private void RaiseAttention(SyncPair pair, SyncStateStore state, AttentionNotice notice)
+    {
+        state.SetMeta(AttentionKindKey, notice.Kind.ToString());
+        attention.Raise(pair, notice);
+    }
+
+    private void ClearAttention(SyncPair pair, SyncStateStore state)
+    {
+        state.SetMeta(AttentionKindKey, null);
+        attention.Clear(pair);
     }
 
     /// <summary>Alerts at once for problems retrying cannot fix, and after a few failures in a row for the rest.</summary>
@@ -268,7 +306,7 @@ internal sealed class SyncEngine(ProtonDriveClient client, ISyncObserver observe
         switch (ex)
         {
             case SyncRootUnavailableException:
-                attention.Raise(pair, new AttentionNotice(
+                RaiseAttention(pair, state, new AttentionNotice(
                     AttentionKind.FolderUnavailable,
                     $"sync stopped: {ex.Message.TrimEnd('.')}",
                     $"""
@@ -279,7 +317,7 @@ internal sealed class SyncEngine(ProtonDriveClient client, ISyncObserver observe
                 return;
 
             case Proton.Sdk.Api.ProtonApiException { Code: 10013 } or Core.Auth.NotLoggedInException:
-                attention.Raise(pair, SyncAttention.SessionEndedNotice);
+                RaiseAttention(pair, state, SyncAttention.SessionEndedNotice);
                 return;
         }
 
@@ -292,7 +330,7 @@ internal sealed class SyncEngine(ProtonDriveClient client, ISyncObserver observe
 
         if (count >= FailuresBeforeAttention)
         {
-            attention.Raise(pair, new AttentionNotice(
+            RaiseAttention(pair, state, new AttentionNotice(
                 AttentionKind.Failing,
                 $"sync is failing: {ex.Message.TrimEnd('.')}",
                 $"""
