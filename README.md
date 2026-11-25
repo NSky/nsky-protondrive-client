@@ -1,4 +1,4 @@
-# nsky-protondrive-client
+# protondrive-client
 
 Unofficial command-line client for Proton Drive, written in C# on top of the
 [Proton Drive SDK](https://github.com/ProtonDriveApps/sdk), with bidirectional synchronization of local
@@ -37,7 +37,7 @@ are not supported.
 **On Arch Linux**, from the AUR: `yay -S nsky-protondrive-client-bin` (or any AUR helper, or `makepkg -si`).
 
 **From a release** (download `protondrive-<version>-linux-x64.tar.gz` or `-linux-arm64.tar.gz` from the
-[releases page](https://github.com/NSky/nsky-protondrive-client/releases), and check it against `SHA256SUMS`):
+[releases page](https://github.com/NSky/protondrive-client/releases), and check it against `SHA256SUMS`):
 
 ```bash
 tar -xzf protondrive-0.2.0-linux-x64.tar.gz

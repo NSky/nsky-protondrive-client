@@ -16,7 +16,7 @@
 
     <Version>0.2.2</Version>
     <Authors>NSky Labs</Authors>
-    <Product>nsky-protondrive-client</Product>
+    <Product>protondrive-client</Product>
     <Description>Unofficial, alpha-quality Proton Drive command-line client with folder sync. Not affiliated with Proton AG. Provided as is, without warranty.</Description>
   </PropertyGroup>
 

@@ -1,0 +1,83 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<!--
+  GitHub social preview for NSky/protondrive-client.
+  1280x640 (2:1). All text and key elements stay inside the safe area x 80-1200, y 80-560 (a 40pt border at 2x),
+  so nothing is cropped where the image is shown smaller or cut to another ratio. Only the background bleeds.
+  Render: rsvg-convert -w 1280 -h 640 social-preview.svg -o social-preview.png
+  Deliberately no Proton logo or brand colours: this is an unofficial project.
+-->
+<svg xmlns="http://www.w3.org/2000/svg" width="1280" height="640" viewBox="0 0 1280 640">
+  <defs>
+    <linearGradient id="bg" x1="0" y1="0" x2="1" y2="1">
+      <stop offset="0" stop-color="#0b1220"/>
+      <stop offset="1" stop-color="#14213d"/>
+    </linearGradient>
+    <radialGradient id="glow" cx="0.82" cy="0.18" r="0.6">
+      <stop offset="0" stop-color="#2dd4bf" stop-opacity="0.16"/>
+      <stop offset="1" stop-color="#2dd4bf" stop-opacity="0"/>
+    </radialGradient>
+    <linearGradient id="term" x1="0" y1="0" x2="0" y2="1">
+      <stop offset="0" stop-color="#111827"/>
+      <stop offset="1" stop-color="#0d1424"/>
+    </linearGradient>
+  </defs>
+
+  <!-- Background (full bleed, decorative) -->
+  <rect width="1280" height="640" fill="url(#bg)"/>
+  <rect width="1280" height="640" fill="url(#glow)"/>
+  <g stroke="#ffffff" stroke-opacity="0.035" stroke-width="1">
+    <path d="M0 160H1280M0 320H1280M0 480H1280M320 0V640M640 0V640M960 0V640"/>
+  </g>
+
+  <!-- Title block -->
+  <text x="80" y="112" font-family="Noto Sans, DejaVu Sans, sans-serif" font-size="20" font-weight="600"
+        letter-spacing="3" fill="#2dd4bf">NSKY LABS</text>
+  <text x="78" y="182" font-family="Noto Sans, DejaVu Sans, sans-serif" font-size="74" font-weight="700"
+        fill="#f1f5f9">protondrive</text>
+  <g transform="translate(548 136)">
+    <rect width="104" height="40" rx="20" fill="#f59e0b" fill-opacity="0.14" stroke="#f59e0b" stroke-width="2"/>
+    <text x="52" y="27" text-anchor="middle" font-family="Noto Sans, DejaVu Sans, sans-serif" font-size="19"
+          font-weight="700" letter-spacing="2" fill="#fbbf24">ALPHA</text>
+  </g>
+  <text x="80" y="228" font-family="Noto Sans, DejaVu Sans, sans-serif" font-size="27" fill="#94a3b8">Unofficial command-line client for Proton Drive, with two-way folder sync</text>
+
+  <!-- Terminal -->
+  <g transform="translate(80 268)">
+    <rect width="640" height="268" rx="14" fill="url(#term)" stroke="#1f2d47" stroke-width="2"/>
+    <circle cx="26" cy="24" r="7" fill="#ef4444" fill-opacity="0.85"/>
+    <circle cx="48" cy="24" r="7" fill="#f59e0b" fill-opacity="0.85"/>
+    <circle cx="70" cy="24" r="7" fill="#22c55e" fill-opacity="0.85"/>
+    <path d="M0 48H640" stroke="#1f2d47" stroke-width="2"/>
+    <g font-family="DejaVu Sans Mono, monospace" font-size="21" xml:space="preserve">
+      <text x="26" y="88"><tspan fill="#2dd4bf">$</tspan><tspan fill="#e2e8f0"> protondrive login</tspan></text>
+      <text x="26" y="124"><tspan fill="#2dd4bf">$</tspan><tspan fill="#e2e8f0"> protondrive sync add ~/Proton /Laptop</tspan></text>
+      <text x="26" y="160"><tspan fill="#2dd4bf">$</tspan><tspan fill="#e2e8f0"> protondrive service enable</tspan></text>
+      <text x="26" y="196" fill="#94a3b8">Background sync enabled: continuously.</text>
+      <text x="26" y="232"><tspan fill="#94a3b8">~/Proton ⇄ /Laptop: </tspan><tspan fill="#4ade80">synced (12 changes)</tspan></text>
+    </g>
+  </g>
+
+  <!-- Features -->
+  <g font-family="Noto Sans, DejaVu Sans, sans-serif" font-size="25" fill="#e2e8f0">
+    <g transform="translate(768 292)">
+      <path d="M2 12l8 8 16-16" fill="none" stroke="#2dd4bf" stroke-width="4" stroke-linecap="round" stroke-linejoin="round"/>
+      <text x="42" y="21">Two-way sync, conflicts kept</text>
+    </g>
+    <g transform="translate(768 340)">
+      <path d="M2 12l8 8 16-16" fill="none" stroke="#2dd4bf" stroke-width="4" stroke-linecap="round" stroke-linejoin="round"/>
+      <text x="42" y="21">Background service (systemd)</text>
+    </g>
+    <g transform="translate(768 388)">
+      <path d="M2 12l8 8 16-16" fill="none" stroke="#2dd4bf" stroke-width="4" stroke-linecap="round" stroke-linejoin="round"/>
+      <text x="42" y="21">Nothing deleted permanently</text>
+    </g>
+    <g transform="translate(768 436)">
+      <path d="M2 12l8 8 16-16" fill="none" stroke="#2dd4bf" stroke-width="4" stroke-linecap="round" stroke-linejoin="round"/>
+      <text x="42" y="21">Self-contained Linux binary</text>
+    </g>
+  </g>
+
+  <!-- Footer (inside the safe area) -->
+  <text x="768" y="510" font-family="DejaVu Sans Mono, monospace" font-size="18" fill="#2dd4bf">github.com/NSky/protondrive-client</text>
+  <text x="768" y="538" font-family="Noto Sans, DejaVu Sans, sans-serif" font-size="17" fill="#64748b">Not affiliated with Proton AG · MIT License</text>
+</svg>

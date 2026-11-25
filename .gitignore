@@ -425,7 +425,7 @@ FodyWeavers.xsd
 # Official VS Code C# Dev Kit Extension exclusion
 #*.lscache
 
-# nsky-protondrive-client
+# protondrive-client
 [Bb]in/
 [Oo]bj/
 
