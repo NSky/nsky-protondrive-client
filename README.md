@@ -34,6 +34,8 @@ x86-64 and ARM64 Linux distributions with glibc 2.34 or newer (Ubuntu 22.04+, De
 RHEL/Rocky/Alma 9+, openSUSE Leap 15.6+/Tumbleweed, Arch, and others). Alpine and other musl-based distributions
 are not supported.
 
+**On Arch Linux**, from the AUR: `yay -S nsky-protondrive-client-bin` (or any AUR helper, or `makepkg -si`).
+
 **From a release** (download `protondrive-<version>-linux-x64.tar.gz` or `-linux-arm64.tar.gz` from the
 [releases page](https://github.com/NSky/nsky-protondrive-client/releases), and check it against `SHA256SUMS`):
 
@@ -130,6 +132,20 @@ Pushing a tag `v<version>` (matching `<Version>` in `Directory.Build.props`) run
 installer, and publishes them with `SHA256SUMS` as a GitHub pre-release. For the workflow to read the `Proton.*`
 packages, each of the four packages must grant this repository read access (package settings, **Manage Actions
 access**).
+
+After publishing the release, the workflow updates the AUR package
+[`nsky-protondrive-client-bin`](https://aur.archlinux.org/packages/nsky-protondrive-client-bin) with
+`packaging/aur/update-aur.sh`. In an Arch Linux container, the script sets the new `pkgver`, computes the
+checksums from the archives it just built, regenerates `.SRCINFO`, test-builds and runs the package, and pushes.
+This needs:
+
+- the repository secret `AUR_SSH_PRIVATE_KEY`: the private half of an SSH key whose public half is added to the
+  AUR account that maintains the package (AUR **My Account**, **SSH Public Key**);
+- optionally, the repository variables `AUR_GIT_NAME` and `AUR_GIT_EMAIL` for the author of the AUR commit
+  (by default the GitHub owner name and its noreply address).
+
+To check an update by hand without pushing (on Arch), run
+`packaging/aur/update-aur.sh <version> <folder with both archives>`.
 
 ### Projects
 

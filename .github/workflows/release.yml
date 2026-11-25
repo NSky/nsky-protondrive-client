@@ -7,6 +7,11 @@ name: Release
 # The Proton.* packages come from this owner's GitHub Packages feed. GITHUB_TOKEN can read them only if each
 # package (Proton.Sdk, Proton.Drive.Sdk, Proton.Drive.Sdk.Account, Proton.Cryptography) grants this repository
 # access: package settings > Manage Actions access > add this repository with the Read role.
+#
+# After the release is published, the "aur" job updates the AUR package nsky-protondrive-client-bin
+# (packaging/aur/update-aur.sh). It needs the repository secret AUR_SSH_PRIVATE_KEY: the private half of an SSH key
+# whose public half is added to the AUR account that maintains the package. Optional repository variables
+# AUR_GIT_NAME and AUR_GIT_EMAIL set the author of the AUR commit.
 
 on:
   push:
@@ -91,3 +96,65 @@ jobs:
             --title "protondrive ${GITHUB_REF_NAME#v}" \
             --prerelease \
             --notes "Alpha release, provided as is, without warranty. Unofficial; not affiliated with Proton AG. See the README's Install section and Disclaimer."
+
+  aur:
+    name: Update the AUR package
+    needs: release
+    if: startsWith(github.ref, 'refs/tags/v')
+    runs-on: ubuntu-latest
+    # makepkg and updpkgsums need Arch Linux.
+    container: archlinux:base-devel
+    steps:
+      - name: Check the AUR key
+        env:
+          AUR_SSH_PRIVATE_KEY: ${{ secrets.AUR_SSH_PRIVATE_KEY }}
+        run: |
+          if [ -z "$AUR_SSH_PRIVATE_KEY" ]; then
+            echo "::error::The repository secret AUR_SSH_PRIVATE_KEY is not set; the AUR package was not updated."
+            exit 1
+          fi
+
+      - name: Install tools
+        run: pacman -Syu --noconfirm --needed git openssh pacman-contrib
+
+      - uses: actions/checkout@v4
+        with:
+          sparse-checkout: packaging/aur
+
+      - uses: actions/download-artifact@v4
+        with:
+          path: dist
+          merge-multiple: true
+
+      - name: Set up a build user and SSH access to the AUR
+        env:
+          AUR_SSH_PRIVATE_KEY: ${{ secrets.AUR_SSH_PRIVATE_KEY }}
+        run: |
+          # makepkg refuses to run as root.
+          useradd --create-home builder
+          ssh_dir=/home/builder/.ssh
+          install -d -m 700 -o builder -g builder "$ssh_dir"
+          printf '%s\n' "$AUR_SSH_PRIVATE_KEY" > "$ssh_dir/aur"
+          # The AUR's host key, pinned. Its fingerprint, SHA256:RFzBCUItH9LZS0cKB5UE6ceAYhBD5C8GeOBip8Z11+4,
+          # is published on https://aur.archlinux.org.
+          echo 'aur.archlinux.org ssh-ed25519 AAAAC3NzaC1lZDI1NTE5AAAAIEuBKrPzbawxA/k2g6NcyV5jmqwJ2s+zpgZGZ7tpLIcN' > "$ssh_dir/known_hosts"
+          printf '%s\n' \
+            'Host aur.archlinux.org' \
+            '  User aur' \
+            '  IdentityFile ~/.ssh/aur' \
+            '  IdentitiesOnly yes' \
+            '  StrictHostKeyChecking yes' > "$ssh_dir/config"
+          chown -R builder:builder "$ssh_dir"
+          chmod 600 "$ssh_dir"/*
+          chmod -R a+rX dist packaging
+
+      - name: Update and push the AUR package
+        env:
+          GIT_AUTHOR_NAME: ${{ vars.AUR_GIT_NAME || github.repository_owner }}
+          GIT_AUTHOR_EMAIL: ${{ vars.AUR_GIT_EMAIL || format('{0}@users.noreply.github.com', github.repository_owner) }}
+          GIT_COMMITTER_NAME: ${{ vars.AUR_GIT_NAME || github.repository_owner }}
+          GIT_COMMITTER_EMAIL: ${{ vars.AUR_GIT_EMAIL || format('{0}@users.noreply.github.com', github.repository_owner) }}
+        run: |
+          runuser --preserve-environment -u builder -- env HOME=/home/builder \
+            sh packaging/aur/update-aur.sh "${GITHUB_REF_NAME#v}" dist --push
+
