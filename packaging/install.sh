@@ -6,7 +6,8 @@
 #   sudo ./install.sh --prefix /usr       install into /usr (for distribution packages)
 #   sudo ./install.sh --uninstall         remove it again
 #
-# Options: --prefix DIR (default /usr/local), --destdir DIR (stage into DIR, for packaging), --uninstall.
+# Options: --prefix DIR (default /usr/local), --sysconfdir DIR (default /etc), --destdir DIR (stage into DIR, for
+# packaging), --uninstall.
 #
 # Layout (PREFIX=/usr/local):
 #   /usr/local/lib/protondrive/            the program (self-contained: no .NET runtime needed)
@@ -14,6 +15,7 @@
 #   /usr/local/lib/systemd/user/           systemd *user* units, one instance per user who enables them
 #   /usr/local/share/doc/protondrive/      README, license
 #   /usr/local/share/licenses/protondrive/ license
+#   /etc/profile.d/protondrive.sh          shows sync problems when a user opens a terminal (prints nothing otherwise)
 #
 # Nothing is written to home folders: each user's login, settings and sync state stay in their own
 # ~/.config/protondrive and ~/.local/state/protondrive, and are not removed by --uninstall.
@@ -21,6 +23,7 @@
 set -eu
 
 PREFIX=/usr/local
+SYSCONFDIR=/etc
 DESTDIR=
 ACTION=install
 
@@ -30,6 +33,8 @@ while [ $# -gt 0 ]; do
         --prefix=*) PREFIX=${1#*=}; shift ;;
         --destdir) [ $# -ge 2 ] || { echo "install.sh: --destdir needs a directory" >&2; exit 2; }; DESTDIR=$2; shift 2 ;;
         --destdir=*) DESTDIR=${1#*=}; shift ;;
+        --sysconfdir) SYSCONFDIR=${2:?--sysconfdir needs a directory}; shift 2 ;;
+        --sysconfdir=*) SYSCONFDIR=${1#*=}; shift ;;
         --uninstall) ACTION=uninstall; shift ;;
         -h|--help) sed -n '2,23p' "$0" | sed 's/^# \{0,1\}//'; exit 0 ;;
         *) echo "install.sh: unknown option '$1' (see --help)" >&2; exit 2 ;;
@@ -48,6 +53,7 @@ BINDIR=$PREFIX/bin
 UNITDIR=$PREFIX/lib/systemd/user
 DOCDIR=$PREFIX/share/doc/protondrive
 LICENSEDIR=$PREFIX/share/licenses/protondrive
+PROFILE_SCRIPT=${SYSCONFDIR%/}/profile.d/protondrive.sh
 UNITS="protondrive-sync-watch.service protondrive-sync.service protondrive-sync.timer"
 
 require_writable() {
@@ -63,6 +69,7 @@ uninstall() {
     require_writable
     rm -f "$DESTDIR$BINDIR/protondrive"
     rm -rf "$DESTDIR$APPDIR" "$DESTDIR$DOCDIR" "$DESTDIR$LICENSEDIR"
+    rm -f "$DESTDIR$PROFILE_SCRIPT"
     for unit in $UNITS; do rm -f "$DESTDIR$UNITDIR/$unit"; done
     echo "Removed protondrive from $PREFIX."
     echo "Users' settings and sync state in their home folders were left in place."
@@ -95,6 +102,8 @@ install_files() {
 
     install -m 644 "$SOURCE/README.md" "$SOURCE/LICENSE" "$DESTDIR$DOCDIR/"
     install -m 644 "$SOURCE/LICENSE" "$DESTDIR$LICENSEDIR/"
+    install -d -m 755 "$(dirname -- "$DESTDIR$PROFILE_SCRIPT")"
+    install -m 644 "$SOURCE/profile.d/protondrive.sh" "$DESTDIR$PROFILE_SCRIPT"
 
     echo "Installed protondrive $(cat "$SOURCE/VERSION" 2>/dev/null || echo) into $PREFIX."
 

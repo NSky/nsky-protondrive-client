@@ -38,7 +38,7 @@ internal static class LocalScanner
             foreach (var entry in entries)
             {
                 var name = entry.Name;
-                if (current.Path.Length == 0 && name == SyncPaths.EngineFolderName)
+                if (current.Path.Length == 0 && SyncPaths.IsEngineEntry(name))
                 {
                     continue;
                 }

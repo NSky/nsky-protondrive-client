@@ -126,6 +126,14 @@ internal static class ServiceCommand
 
         Console.WriteLine($"Background sync: {mode}");
         Console.WriteLine($"Runs after logout (linger): {(IsLingerEnabled() ? "yes" : "no")}");
+
+        var problems = SyncPairStore.Load().Select(SyncAttention.GetSummary).OfType<string>().ToList();
+        Console.WriteLine(problems.Count == 0 ? "Synced folders: no problems" : "Synced folders that need attention:");
+        foreach (var problem in problems)
+        {
+            Console.WriteLine(problem);
+        }
+
         Console.WriteLine();
 
         RunInteractive("systemctl", "--user", "--no-pager", "--lines=15", "status", WatchUnit, TimerUnit, TimerServiceUnit);

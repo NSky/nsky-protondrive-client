@@ -1,5 +1,6 @@
 using System.Globalization;
 using System.Security.Cryptography;
+using NSkyLabs.ProtonDrive.Cli.Notifications;
 using NSkyLabs.ProtonDrive.Sync;
 using NSkyLabs.ProtonDrive.Sync.State;
 using Proton.Drive.Sdk.Nodes;
@@ -230,6 +231,7 @@ internal static class SyncCommand
         }
 
         File.Delete(removed.LockPath);
+        new SyncAttention().Clear(removed);
 
         Console.WriteLine($"Removed {ConsoleSyncObserver.Describe(removed)}. No files were changed on either side.");
         return 0;
@@ -263,6 +265,13 @@ internal static class SyncCommand
         foreach (var pair in pairs)
         {
             Console.WriteLine($"{pair.Id}  {ConsoleSyncObserver.Describe(pair)}");
+
+            if (SyncAttention.GetSummary(pair) is { } problem)
+            {
+                var problemText = problem.Trim();
+                var prefix = pair.LocalPath + ": ";
+                Console.WriteLine($"    NEEDS ATTENTION: {(problemText.StartsWith(prefix, StringComparison.Ordinal) ? problemText[prefix.Length..] : problemText)}");
+            }
 
             if (!File.Exists(pair.DatabasePath))
             {
@@ -317,8 +326,10 @@ internal static class SyncCommand
     private static async Task<int> SyncOnceAsync(AuthService auth, string? idOrPath, SyncPassOptions options, bool showProgress, CancellationToken cancellationToken)
     {
         var pairs = SelectPairs(idOrPath);
-        var context = await auth.ResumeAsync(cancellationToken).ConfigureAwait(false);
-        var engine = new SyncEngine(DriveBrowser.Create(context).Client, new ConsoleSyncObserver(showProgress, quietWhenUpToDate: false));
+        var reporter = new AttentionReporter(pairs);
+        var context = await ResumeAsync(auth, pairs, reporter, cancellationToken).ConfigureAwait(false);
+        var observer = new ConsoleSyncObserver(showProgress, quietWhenUpToDate: false, onPassFinished: reporter.UpdateStatus);
+        var engine = new SyncEngine(DriveBrowser.Create(context).Client, observer, reporter.Attention);
 
         var exitCode = 0;
         foreach (var pair in pairs)
@@ -345,9 +356,22 @@ internal static class SyncCommand
     private static async Task<int> WatchAsync(AuthService auth, string? idOrPath, bool showProgress, CancellationToken cancellationToken)
     {
         var pairs = SelectPairs(idOrPath);
-        var context = await auth.ResumeAsync(cancellationToken).ConfigureAwait(false);
-        var observer = new ConsoleSyncObserver(showProgress, quietWhenUpToDate: true);
-        var engine = new SyncEngine(DriveBrowser.Create(context).Client, observer);
+        var reporter = new AttentionReporter(pairs);
+
+        AuthenticatedContext context;
+        try
+        {
+            context = await ResumeAsync(auth, pairs, reporter, cancellationToken).ConfigureAwait(false);
+        }
+        catch (NotLoggedInException ex)
+        {
+            Console.Error.WriteLine(ex.Message);
+            return SessionEndedExitCode;
+        }
+
+        var observer = new ConsoleSyncObserver(showProgress, quietWhenUpToDate: true, onPassFinished: reporter.UpdateStatus);
+        var engine = new SyncEngine(DriveBrowser.Create(context).Client, observer, reporter.Attention);
+        reporter.UpdateStatus();
 
         Console.Error.WriteLine($"{AppInfo.CommandName} {AppInfo.Version}: {AppInfo.ShortNotice}");
         Console.Error.WriteLine($"Watching {pairs.Count} folder(s). Press Ctrl+C to stop.");
@@ -363,6 +387,11 @@ internal static class SyncCommand
         }
         catch (Exception ex) when (IsFatal(ex))
         {
+            foreach (var pair in pairs)
+            {
+                reporter.Attention.Raise(pair, SyncAttention.SessionEndedNotice);
+            }
+
             // A distinct exit code lets the systemd unit stop restarting until the user logs in again.
             Console.Error.WriteLine($"The session has ended ({ex.Message}). Run '{AppInfo.CommandName} login', then restart the sync.");
             return SessionEndedExitCode;
@@ -370,6 +399,28 @@ internal static class SyncCommand
 
         Console.Error.WriteLine("Stopped.");
         return 0;
+    }
+
+    /// <summary>Resumes the session; if there is none, marks every folder as needing a new login.</summary>
+    private static async Task<AuthenticatedContext> ResumeAsync(
+        AuthService auth,
+        IReadOnlyList<SyncPair> pairs,
+        AttentionReporter reporter,
+        CancellationToken cancellationToken)
+    {
+        try
+        {
+            return await auth.ResumeAsync(cancellationToken).ConfigureAwait(false);
+        }
+        catch (NotLoggedInException)
+        {
+            foreach (var pair in pairs)
+            {
+                reporter.Attention.Raise(pair, SyncAttention.SessionEndedNotice);
+            }
+
+            throw;
+        }
     }
 
     /// <summary>Errors that retrying will not fix: the session is gone, so the user must log in again.</summary>

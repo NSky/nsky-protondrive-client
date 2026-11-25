@@ -7,7 +7,8 @@ namespace NSkyLabs.ProtonDrive.Cli.Sync;
 /// <summary>Renders sync activity on stderr: a plan summary, live transfer progress and one line per change.</summary>
 /// <param name="showProgress">Show the live transfer block on a terminal.</param>
 /// <param name="quietWhenUpToDate">Watch mode: say nothing about passes that found nothing to do.</param>
-internal sealed class ConsoleSyncObserver(bool showProgress, bool quietWhenUpToDate) : ISyncObserver
+/// <param name="onPassFinished">Called after each pass (used to refresh the systemd status line).</param>
+internal sealed class ConsoleSyncObserver(bool showProgress, bool quietWhenUpToDate, Action? onPassFinished = null) : ISyncObserver
 {
     private readonly ConcurrentDictionary<SyncAction, TransferProgress.FileTransfer> _transfers = new();
     private readonly ConcurrentDictionary<string, bool> _shownWarnings = new(StringComparer.Ordinal);
@@ -146,6 +147,8 @@ internal sealed class ConsoleSyncObserver(bool showProgress, bool quietWhenUpToD
 
     public void PassFinished(SyncPair pair, SyncPassResult result)
     {
+        onPassFinished?.Invoke();
+
         if (_progress is not null)
         {
             _progress.DisposeAsync().AsTask().GetAwaiter().GetResult();

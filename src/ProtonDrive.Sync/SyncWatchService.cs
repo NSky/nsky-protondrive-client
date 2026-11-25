@@ -163,9 +163,10 @@ internal sealed class SyncWatchService(SyncEngine engine, IReadOnlyList<SyncPair
 
         private void OnChanged(object sender, FileSystemEventArgs e)
         {
-            // The engine's own folder (temporary downloads, local trash) is not synced.
+            // The engine's own files (temporary downloads, local trash, the notice file) are not synced.
             var relative = Path.GetRelativePath(pair.LocalPath, e.FullPath);
-            if (relative == SyncPaths.EngineFolderName || relative.StartsWith(SyncPaths.EngineFolderName + Path.DirectorySeparatorChar, StringComparison.Ordinal))
+            var top = relative.Split(Path.DirectorySeparatorChar)[0];
+            if (SyncPaths.IsEngineEntry(top) || top.StartsWith(SyncAttention.NoticeFileName, StringComparison.Ordinal))
             {
                 return;
             }

@@ -10,6 +10,12 @@ internal static class SyncPaths
 
     public const string PartialSuffix = ".protondrive-part";
 
+    /// <summary>
+    /// Entries at the root of a sync folder that belong to the engine and are never synced in either direction:
+    /// the engine folder and the notice file.
+    /// </summary>
+    public static bool IsEngineEntry(string rootName) => rootName is EngineFolderName or SyncAttention.NoticeFileName;
+
     public static string Combine(string parent, string name) => parent.Length == 0 ? name : parent + "/" + name;
 
     public static string GetParent(string path)

@@ -45,4 +45,11 @@ internal enum SyncPassOutcome
 }
 
 /// <param name="HeldDeletions">Synced items whose deletion (on either side) waits for --force.</param>
-internal sealed record SyncPassResult(SyncPassOutcome Outcome, int Succeeded = 0, int Failed = 0, string? Message = null, int HeldDeletions = 0);
+/// <param name="Held">The safety decision that held them, if any.</param>
+internal sealed record SyncPassResult(
+    SyncPassOutcome Outcome,
+    int Succeeded = 0,
+    int Failed = 0,
+    string? Message = null,
+    int HeldDeletions = 0,
+    SafetyDecision? Held = null);

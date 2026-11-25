@@ -11,6 +11,8 @@ Documentation=file://@DOCDIR@/README.md
 
 [Service]
 Type=simple
+# Lets protondrive show a one-line status (e.g. "Needs attention: ...") in 'systemctl --user status'.
+NotifyAccess=main
 ExecStart=@BINDIR@/protondrive sync --watch --no-progress
 Restart=on-failure
 RestartSec=60

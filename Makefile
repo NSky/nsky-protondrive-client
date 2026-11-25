@@ -11,6 +11,7 @@
 # Build as your user and install with sudo: "sudo make install" only copies what "make" built.
 
 PREFIX        ?= /usr/local
+SYSCONFDIR    ?= /etc
 DESTDIR       ?=
 CONFIGURATION ?= Release
 DOTNET        ?= dotnet
@@ -35,6 +36,8 @@ publish:
 		-o $(STAGE)/protondrive
 	install -d $(STAGE)/systemd
 	install -m 644 packaging/systemd/*.in $(STAGE)/systemd/
+	install -d $(STAGE)/profile.d
+	install -m 644 packaging/profile.d/protondrive.sh $(STAGE)/profile.d/
 	install -m 755 packaging/install.sh $(STAGE)/
 	install -m 644 README.md LICENSE $(STAGE)/
 	echo "$(VERSION)" > $(STAGE)/VERSION
@@ -43,10 +46,10 @@ publish:
 # Deliberately not depending on "publish": under sudo there is usually no .NET SDK or NuGet token.
 install:
 	@test -x $(STAGE)/protondrive/protondrive || { echo "Nothing built for $(RID) yet: run 'make' first (as your user)." >&2; exit 1; }
-	sh $(STAGE)/install.sh --prefix "$(PREFIX)" --destdir "$(DESTDIR)"
+	sh $(STAGE)/install.sh --prefix "$(PREFIX)" --sysconfdir "$(SYSCONFDIR)" --destdir "$(DESTDIR)"
 
 uninstall:
-	sh packaging/install.sh --uninstall --prefix "$(PREFIX)" --destdir "$(DESTDIR)"
+	sh packaging/install.sh --uninstall --prefix "$(PREFIX)" --sysconfdir "$(SYSCONFDIR)" --destdir "$(DESTDIR)"
 
 dist: publish
 	tar -C artifacts -czf artifacts/$(NAME).tar.gz $(NAME)

@@ -177,7 +177,7 @@ internal sealed class RemoteTree(ProtonDriveClient client, SyncStateStore state,
                     continue;
                 }
 
-                if (ignoreRules.IsIgnored(row.Name) || (current.Path.Length == 0 && row.Name == SyncPaths.EngineFolderName))
+                if (ignoreRules.IsIgnored(row.Name) || (current.Path.Length == 0 && SyncPaths.IsEngineEntry(row.Name)))
                 {
                     continue;
                 }

@@ -59,6 +59,7 @@ What goes where (with the default prefix `/usr/local`):
 | The `protondrive` command (symlink) | `/usr/local/bin/protondrive` |
 | systemd user units | `/usr/local/lib/systemd/user/` |
 | README and license | `/usr/local/share/doc/protondrive/`, `/usr/local/share/licenses/protondrive/` |
+| Login message about sync problems | `/etc/profile.d/protondrive.sh` (`SYSCONFDIR`, `--sysconfdir`) |
 
 To remove it: `sudo ./install.sh --uninstall` from the release folder, or `sudo make uninstall`. Users' settings and
 sync state in their home folders are left in place. Users who enabled background sync should first run
@@ -251,6 +252,23 @@ spread to it.
 - **The local folder suddenly empty** although items were synced before (an unmounted disk, a failed scan):
   nothing is synced at all until `--force`.
 - A missing local folder is never re-created.
+
+**When something needs your attention.** Held deletions, a paused folder, a missing folder, an ended session,
+or a sync that keeps failing (3 times in a row) are reported in several places, so you notice without reading
+the log:
+
+- **A notice file in the synced folder**: `PROTONDRIVE-SYNC-NEEDS-ATTENTION.txt`, explaining the problem, listing
+  the affected items and giving the command that resolves it. It is never synced, and it is not written into a
+  missing folder.
+- **A message when you open a terminal** (also over SSH): `/etc/profile.d/protondrive.sh` prints one line per
+  affected folder, and nothing when all is well.
+- **A desktop notification**, when sync runs in the background and you are logged into a desktop session; also
+  when the problem is resolved. On a headless system this is skipped.
+- **The systemd status line**: `systemctl --user status protondrive-sync-watch` (and `protondrive service
+  status`) shows "Needs attention: ..." or "N folder(s) in sync".
+- `protondrive sync status` shows `NEEDS ATTENTION` for the folder.
+
+All of them disappear by themselves once the problem is resolved.
 
 **Finding changes.** Remote changes come from the Drive events feed: the first pass lists the whole remote
 folder, later passes fetch only the events since the last one. Local changes are found by a scan of names,

@@ -7,4 +7,5 @@ Documentation=file://@DOCDIR@/README.md
 
 [Service]
 Type=oneshot
+NotifyAccess=main
 ExecStart=@BINDIR@/protondrive sync --no-progress
