@@ -3,7 +3,19 @@
 All notable changes to protondrive-client are listed here, newest first. The format follows
 [Keep a Changelog](https://keepachangelog.com/en/1.1.0/), and versions follow [Semantic Versioning](https://semver.org/).
 
-## [0.2.6] - Unreleased
+## [0.2.7] - Unreleased
+
+### Added
+
+- **Local moves and renames are moved on Proton Drive.** Before, a file or folder moved or renamed in a synced folder
+  was trashed on Proton Drive and uploaded again under the new path. Now sync moves it on the server, so nothing is
+  uploaded again and its version history and shares stay with it:
+  - a file is recognized by its size and modification time, when no other missing or new file has the same ones;
+  - a folder is recognized when at least half of its files are found unchanged in one new folder; anything that
+    differs inside is synced as usual;
+  - anything not recognized is synced as before.
+
+## [0.2.6] - 2026-11-26
 
 ### Added
 
@@ -24,13 +36,6 @@ All notable changes to protondrive-client are listed here, newest first. The for
 
   The plan summary colors its counts the same way. After a sync, the summary line says how many conflicts there were.
   Colors are off when the output is not a terminal, when `NO_COLOR` is set, or with `TERM=dumb`.
-- **Local moves and renames are moved on Proton Drive.** Before, a file or folder moved or renamed in a synced folder
-  was trashed on Proton Drive and uploaded again under the new path. Now sync moves it on the server, so nothing is
-  uploaded again and its version history and shares stay with it:
-  - a file is recognized by its size and modification time, when no other missing or new file has the same ones;
-  - a folder is recognized when at least half of its files are found unchanged in one new folder; anything that
-    differs inside is synced as usual;
-  - anything not recognized is synced as before.
 
 ### Changed
 
@@ -72,5 +77,6 @@ All notable changes to protondrive-client are listed here, newest first. The for
 - **Faster folder creation** in `upload` and when a sync creates remote folders: folders are created one level at a
   time, with up to 8 created at once, about four times faster in testing.
 
-[0.2.6]: https://github.com/NSky/protondrive-client/compare/v0.2.5...HEAD
+[0.2.7]: https://github.com/NSky/protondrive-client/compare/v0.2.6...HEAD
+[0.2.6]: https://github.com/NSky/protondrive-client/compare/v0.2.5...v0.2.6
 [0.2.5]: https://github.com/NSky/protondrive-client/compare/v0.2.4...v0.2.5
