@@ -57,3 +57,30 @@ public sealed class ConflictMatchTests
 
     private static string Match(LocalItem local, RemoteItem remote) => Match(local, remote, null);
 }
+
+public sealed class ConflictPreviewTests
+{
+    private static readonly DateTimeOffset Time = new(2026, 1, 31, 15, 45, 0, TimeSpan.Zero);
+
+    private static string Preview(long localSize, long remoteSize, string? sha1, DateTimeOffset? remoteTime, SyncActionKind kind = SyncActionKind.ResolveFileConflict) =>
+        SyncExecutor.PreviewConflict(new SyncAction(kind, "a.txt")
+        {
+            Local = new LocalItem("a.txt", false, localSize, Time.UtcTicks),
+            Remote = new RemoteItem("a.txt", false, "n", "r", remoteSize, sha1, remoteTime),
+        }).ToString();
+
+    [Fact]
+    public void Different_sizes_are_a_conflict() => Assert.Equal("Conflict", Preview(10, 11, "abc", Time));
+
+    [Fact]
+    public void Same_size_with_a_server_checksum_is_compared_when_syncing() => Assert.Equal("Compare", Preview(10, 10, "abc", Time.AddDays(-1)));
+
+    [Fact]
+    public void Same_size_and_time_without_a_checksum_is_identical() => Assert.Equal("Same", Preview(10, 10, null, Time));
+
+    [Fact]
+    public void Same_size_different_time_without_a_checksum_is_a_conflict() => Assert.Equal("Conflict", Preview(10, 10, null, Time.AddMinutes(5)));
+
+    [Fact]
+    public void File_against_folder_is_a_conflict() => Assert.Equal("Conflict", Preview(10, 10, "abc", Time, SyncActionKind.RenameLocalForConflict));
+}

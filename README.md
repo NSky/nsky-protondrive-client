@@ -278,6 +278,23 @@ side changed:
   re-created and only the unchanged items in it are deleted.
 - A file or folder moved or renamed on the server is moved locally, not downloaded again.
 
+**Reading the output.** On a terminal, `sync` and `sync --dry-run` color each line by what it means, so
+conflicts stand out:
+
+| Color | Meaning |
+| --- | --- |
+| **Bold yellow**, `CONFLICT …` | Two different versions of the same item. Both are kept; the local one is renamed to `name (conflict …)` |
+| Yellow | Needs a look: warnings, held deletions, and (dry run) same-size files that are compared by checksum when syncing |
+| Red | Moves to a trash (local or Proton Drive); bold red for failures |
+| Green | Changes sent to Proton Drive (uploads, new remote folders) |
+| Cyan | Changes made locally (downloads, new local folders, moves) |
+| Dim | Bookkeeping that changes no files, such as identical files recorded as in sync |
+
+A dry run cannot read the server's copy of a file, so for files on both sides it reports what it can tell without
+reading contents: a different size is a certain conflict, a matching size is checked by checksum when syncing, and
+with no checksum on the server a matching size and time counts as identical. After a real sync, the summary line
+says how many conflicts there were. Colors are off when the output is not a terminal or `NO_COLOR` is set.
+
 **Nothing is deleted permanently.** Remote deletions go to the Proton Drive trash; local ones to
 `<synced folder>/.protondrive/trash/<date>/`. A local file is replaced by a download only if it is still
 unchanged since the scan; if it changed meanwhile, it is left alone and synced on the next pass.

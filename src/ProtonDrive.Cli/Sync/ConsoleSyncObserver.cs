@@ -16,12 +16,14 @@ internal sealed class ConsoleSyncObserver(bool showProgress, bool quietWhenUpToD
     private readonly ConcurrentDictionary<string, bool> _heldLocally = new(StringComparer.Ordinal);
     private TransferProgress? _progress;
     private bool _heldShownThisPass;
+    private int _conflictsThisPass;
 
     private const int MaxHeldShown = 20;
 
     public void PassStarted(SyncPair pair)
     {
         _heldShownThisPass = false;
+        Interlocked.Exchange(ref _conflictsThisPass, 0);
     }
 
     public void DeletionsHeld(SyncPair pair, SafetyDecision decision)
@@ -41,12 +43,12 @@ internal sealed class ConsoleSyncObserver(bool showProgress, bool quietWhenUpToD
 
         if (decision.HeldOnServer)
         {
-            Console.Error.WriteLine($"Warning: {Describe(pair)}: not deleting on Proton Drive yet. {decision.HeldReason}");
+            Console.Error.WriteLine(Ansi.Conflict($"Warning: {Describe(pair)}: not deleting on Proton Drive yet. {decision.HeldReason}"));
             Console.Error.WriteLine("Because that many deletions could be an accident, these wait for your confirmation (everything else keeps syncing):");
         }
         else
         {
-            Console.Error.WriteLine($"Warning: {Describe(pair)}: not deleting local files. {decision.HeldReason}");
+            Console.Error.WriteLine(Ansi.Conflict($"Warning: {Describe(pair)}: not deleting local files. {decision.HeldReason}"));
             Console.Error.WriteLine("This could be an accident, so the local copies are kept, and nothing is synced for this folder until you restore or confirm:");
         }
 
@@ -54,7 +56,7 @@ internal sealed class ConsoleSyncObserver(bool showProgress, bool quietWhenUpToD
         {
             var isFolder = action.Local?.IsFolder ?? action.Remote?.IsFolder ?? action.Base?.IsFolder ?? false;
             var path = decision.HeldOnServer ? RemotePathOf(pair, action.Path) : Path.Combine(pair.LocalPath, action.Path);
-            Console.Error.WriteLine($"  {path}{(isFolder ? "/ (folder)" : string.Empty)}");
+            Console.Error.WriteLine(Ansi.Warning($"  {path}{(isFolder ? "/ (folder)" : string.Empty)}"));
         }
 
         if (held.Count > MaxHeldShown)
@@ -79,7 +81,7 @@ internal sealed class ConsoleSyncObserver(bool showProgress, bool quietWhenUpToD
         // Watch mode runs many passes; repeat a warning only once per process.
         if (_shownWarnings.TryAdd($"{pair.Id}:{message}", true))
         {
-            Write($"Warning: {message}");
+            Write(Ansi.Warning($"Warning: {message}"));
         }
     }
 
@@ -91,7 +93,7 @@ internal sealed class ConsoleSyncObserver(bool showProgress, bool quietWhenUpToD
         {
             foreach (var action in plan.Actions)
             {
-                Console.Error.WriteLine($"  {DescribePlanned(action)}");
+                Console.Error.WriteLine("  " + Colorize(action, DescribePlanned(action, preview: true)));
             }
 
             return;
@@ -125,9 +127,14 @@ internal sealed class ConsoleSyncObserver(bool showProgress, bool quietWhenUpToD
             return;
         }
 
+        if (IsConflict(action, note))
+        {
+            Interlocked.Increment(ref _conflictsThisPass);
+        }
+
         if (DescribeDone(action, note) is { } line)
         {
-            Write(line);
+            Write(IsConflict(action, note) ? Ansi.Conflict(line) : action.Kind == SyncActionKind.ResolveFileConflict ? Ansi.Dim(line) : Colorize(action, line));
         }
     }
 
@@ -139,8 +146,8 @@ internal sealed class ConsoleSyncObserver(bool showProgress, bool quietWhenUpToD
         }
 
         var message = error is ChangedDuringSyncException
-            ? $"Skipped {action.Path}: {error.Message}; it will be synced on the next run"
-            : $"Failed: {DescribePlanned(action)}: {error.Message}";
+            ? Ansi.Warning($"Skipped {action.Path}: {error.Message}; it will be synced on the next run")
+            : Ansi.Error($"Failed: {DescribePlanned(action)}: {error.Message}");
 
         Write(message);
     }
@@ -158,24 +165,28 @@ internal sealed class ConsoleSyncObserver(bool showProgress, bool quietWhenUpToD
         switch (result.Outcome)
         {
             case SyncPassOutcome.UpToDate when result.HeldDeletions > 0 && (!quietWhenUpToDate || _heldShownThisPass):
-                Console.Error.WriteLine(_heldLocally.TryGetValue(pair.Id, out var local) && local
+                Console.Error.WriteLine(Ansi.Conflict(_heldLocally.TryGetValue(pair.Id, out var local) && local
                     ? $"{Describe(pair)}: paused, the remote folder is empty ({result.HeldDeletions} local item(s) kept)"
-                    : $"{Describe(pair)}: up to date, except {result.HeldDeletions} deletion(s) waiting for confirmation");
+                    : $"{Describe(pair)}: up to date, except {result.HeldDeletions} deletion(s) waiting for confirmation"));
                 break;
 
             case SyncPassOutcome.UpToDate when !quietWhenUpToDate && result.HeldDeletions == 0:
-                Console.Error.WriteLine($"{Describe(pair)}: up to date");
+                Console.Error.WriteLine(Ansi.Success($"{Describe(pair)}: up to date"));
                 break;
 
             case SyncPassOutcome.Completed:
-                var held = result.HeldDeletions > 0 ? $"; {result.HeldDeletions} deletion(s) waiting for confirmation" : string.Empty;
+                var held = result.HeldDeletions > 0 ? Ansi.Conflict($"; {result.HeldDeletions} deletion(s) waiting for confirmation") : string.Empty;
+                var conflicts = Volatile.Read(ref _conflictsThisPass);
+                var conflictNote = conflicts > 0
+                    ? Ansi.Conflict($"; {conflicts} conflict(s): both versions kept, the local one as \"name (conflict …)\"")
+                    : string.Empty;
                 Console.Error.WriteLine(result.Failed == 0
-                    ? $"{Describe(pair)}: synced ({result.Succeeded} change(s)){held}"
-                    : $"{Describe(pair)}: {result.Succeeded} change(s) done, {result.Failed} failed or skipped (retried on the next run){held}");
+                    ? Ansi.Success($"{Describe(pair)}: synced ({result.Succeeded} change(s))") + conflictNote + held
+                    : Ansi.Error($"{Describe(pair)}: {result.Succeeded} change(s) done, {result.Failed} failed or skipped (retried on the next run)") + conflictNote + held);
                 break;
 
             case SyncPassOutcome.DryRun:
-                Console.Error.WriteLine("Dry run: nothing was changed.");
+                Console.Error.WriteLine(Ansi.Dim("Dry run: nothing was changed."));
                 break;
 
             case SyncPassOutcome.Busy:
@@ -183,7 +194,7 @@ internal sealed class ConsoleSyncObserver(bool showProgress, bool quietWhenUpToD
                 break;
 
             case SyncPassOutcome.Refused:
-                Console.Error.WriteLine($"{Describe(pair)}: refused. {result.Message}");
+                Console.Error.WriteLine(Ansi.Error($"{Describe(pair)}: refused. {result.Message}"));
                 Console.Error.WriteLine($"Nothing was changed. If this is intended, run '{AppInfo.CommandName} sync --force {pair.LocalPath}'.");
                 break;
         }
@@ -209,30 +220,57 @@ internal sealed class ConsoleSyncObserver(bool showProgress, bool quietWhenUpToD
     {
         var parts = new List<string>();
 
-        void Add(int count, string text)
+        void Add(int count, string text, Func<string, string>? color = null)
         {
             if (count > 0)
             {
-                parts.Add($"{count} {text}");
+                var part = $"{count} {text}";
+                parts.Add(color is null ? part : color(part));
             }
         }
 
-        Add(plan.Count(SyncActionKind.Download), "to download");
-        Add(plan.Count(SyncActionKind.UploadNew) + plan.Count(SyncActionKind.UploadRevision), "to upload");
+        Add(plan.Count(SyncActionKind.Download), "to download", Ansi.ToLocal);
+        Add(plan.Count(SyncActionKind.UploadNew) + plan.Count(SyncActionKind.UploadRevision), "to upload", Ansi.ToRemote);
         Add(plan.Count(SyncActionKind.CreateLocalFolder) + plan.Count(SyncActionKind.CreateRemoteFolder), "folder(s) to create");
-        Add(plan.Count(SyncActionKind.MoveLocal), "to move locally");
-        Add(plan.Count(SyncActionKind.TrashLocal) + plan.Count(SyncActionKind.TrashLocalEarly), "to move to the local trash");
-        Add(plan.Count(SyncActionKind.TrashRemote) + plan.Count(SyncActionKind.TrashRemoteEarly), "to move to the Proton Drive trash");
-        Add(plan.Count(SyncActionKind.ResolveFileConflict) + plan.Count(SyncActionKind.RenameLocalForConflict), "changed on both sides");
+        Add(plan.Count(SyncActionKind.MoveLocal), "to move locally", Ansi.ToLocal);
+        Add(plan.Count(SyncActionKind.TrashLocal) + plan.Count(SyncActionKind.TrashLocalEarly), "to move to the local trash", Ansi.Danger);
+        Add(plan.Count(SyncActionKind.TrashRemote) + plan.Count(SyncActionKind.TrashRemoteEarly), "to move to the Proton Drive trash", Ansi.Danger);
+        var onBothSides = plan.Actions.Where(a => a.Kind is SyncActionKind.ResolveFileConflict or SyncActionKind.RenameLocalForConflict)
+            .Select(SyncExecutor.PreviewConflict)
+            .ToList();
+        Add(onBothSides.Count(p => p == SyncExecutor.ConflictPreview.Conflict), "conflict(s)", Ansi.Conflict);
+        Add(onBothSides.Count(p => p == SyncExecutor.ConflictPreview.Compare), "on both sides, compared by checksum when syncing", Ansi.Warning);
+        Add(onBothSides.Count(p => p == SyncExecutor.ConflictPreview.Same), "identical on both sides", Ansi.Dim);
         Add(plan.Count(SyncActionKind.RecordBase) + plan.Count(SyncActionKind.ForgetBase), "to record");
 
         return string.Join(", ", parts);
     }
 
-    private static string DescribePlanned(SyncAction action) => action.Kind switch
+    /// <summary>A real conflict: two different versions, kept side by side.</summary>
+    private static bool IsConflict(SyncAction action, string? note) =>
+        action.Kind == SyncActionKind.RenameLocalForConflict
+        || (action.Kind == SyncActionKind.ResolveFileConflict && note is not null && note.StartsWith("kept", StringComparison.Ordinal));
+
+    /// <summary>Colors a line about an action by where the change goes.</summary>
+    private static string Colorize(SyncAction action, string line) => action.Kind switch
+    {
+        SyncActionKind.RenameLocalForConflict => Ansi.Conflict(line),
+        SyncActionKind.ResolveFileConflict => SyncExecutor.PreviewConflict(action) switch
+        {
+            SyncExecutor.ConflictPreview.Conflict => Ansi.Conflict(line),
+            SyncExecutor.ConflictPreview.Compare => Ansi.Warning(line),
+            _ => Ansi.Dim(line),
+        },
+        SyncActionKind.TrashLocal or SyncActionKind.TrashLocalEarly or SyncActionKind.TrashRemote or SyncActionKind.TrashRemoteEarly => Ansi.Danger(line),
+        SyncActionKind.UploadNew or SyncActionKind.UploadRevision or SyncActionKind.CreateRemoteFolder => Ansi.ToRemote(line),
+        SyncActionKind.Download or SyncActionKind.CreateLocalFolder or SyncActionKind.MoveLocal => Ansi.ToLocal(line),
+        _ => Ansi.Dim(line),
+    };
+
+    private static string DescribePlanned(SyncAction action, bool preview = false) => action.Kind switch
     {
         SyncActionKind.MoveLocal => $"move {action.Path} -> {action.TargetPath} (moved on the server)",
-        SyncActionKind.RenameLocalForConflict => $"keep both versions of {action.Path} (file and folder)",
+        SyncActionKind.RenameLocalForConflict => $"CONFLICT {action.Path}: a file on one side, a folder on the other; both will be kept",
         SyncActionKind.TrashRemoteEarly or SyncActionKind.TrashRemote => $"trash /{action.Path} on Proton Drive",
         SyncActionKind.TrashLocalEarly or SyncActionKind.TrashLocal => $"move {action.Path} to the local trash",
         SyncActionKind.CreateLocalFolder => $"create folder {action.Path} locally",
@@ -240,16 +278,27 @@ internal sealed class ConsoleSyncObserver(bool showProgress, bool quietWhenUpToD
         SyncActionKind.Download => $"download {action.Path}",
         SyncActionKind.UploadNew => $"upload {action.Path}",
         SyncActionKind.UploadRevision => $"upload new version of {action.Path}",
-        SyncActionKind.ResolveFileConflict => $"{action.Path} changed on both sides: keep both unless identical",
+        SyncActionKind.ResolveFileConflict when !preview => $"{action.Path} changed on both sides: keep both unless identical",
+        SyncActionKind.ResolveFileConflict => SyncExecutor.PreviewConflict(action) switch
+        {
+            SyncExecutor.ConflictPreview.Conflict => $"CONFLICT {action.Path}: different on both sides ({FormatSizes(action)}); both versions will be kept",
+            SyncExecutor.ConflictPreview.Compare => $"{action.Path} is on both sides with the same size: compared by checksum when syncing, both kept if different",
+            _ => $"{action.Path} is identical on both sides (same size and time): recorded as in sync",
+        },
         SyncActionKind.RecordBase => $"record {action.Path} as in sync",
         SyncActionKind.ForgetBase => $"forget {action.Path} (gone on both sides)",
         _ => action.ToString(),
     };
 
+    private static string FormatSizes(SyncAction action) =>
+        $"local {TransferProgress.FormatBytes(action.Local!.Size)}, Proton Drive {TransferProgress.FormatBytes(action.Remote!.Size)}";
+
     private static string? DescribeDone(SyncAction action, string? note) => action.Kind switch
     {
         SyncActionKind.MoveLocal => $"Moved {action.Path} -> {action.TargetPath}",
-        SyncActionKind.RenameLocalForConflict or SyncActionKind.ResolveFileConflict => $"{action.Path} changed on both sides: {note}",
+        SyncActionKind.RenameLocalForConflict => $"CONFLICT {action.Path}: a file on one side, a folder on the other; {note}",
+        SyncActionKind.ResolveFileConflict when IsConflict(action, note) => $"CONFLICT {action.Path}: different on both sides; {note}",
+        SyncActionKind.ResolveFileConflict => $"{action.Path} is on both sides: {note}",
         SyncActionKind.TrashRemoteEarly or SyncActionKind.TrashRemote => $"Trashed /{action.Path} on Proton Drive",
         SyncActionKind.TrashLocalEarly or SyncActionKind.TrashLocal => $"Moved {action.Path} to the local trash",
         SyncActionKind.CreateLocalFolder => $"Created folder {action.Path}",

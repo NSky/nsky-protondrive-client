@@ -397,6 +397,45 @@ internal sealed class SyncExecutor
         }
     }
 
+    /// <summary>What a file found on both sides is likely to turn out as, judged without reading file contents.</summary>
+    internal enum ConflictPreview
+    {
+        /// <summary>Certainly different (or a file on one side and a folder on the other): both versions are kept.</summary>
+        Conflict,
+
+        /// <summary>Same size, and the server has a checksum: the checksum decides when syncing.</summary>
+        Compare,
+
+        /// <summary>The server has no checksum, but size and modification time match: recorded as in sync.</summary>
+        Same,
+    }
+
+    /// <summary>
+    /// Previews <see cref="ResolveFileConflictAsync"/> for a dry run, without reading the local file: only a
+    /// checksum comparison could tell more.
+    /// </summary>
+    internal static ConflictPreview PreviewConflict(SyncAction action)
+    {
+        if (action.Kind != SyncActionKind.ResolveFileConflict || action.Local is not { } local || action.Remote is not { } remote)
+        {
+            return ConflictPreview.Conflict;
+        }
+
+        if (local.Size != remote.Size)
+        {
+            return ConflictPreview.Conflict;
+        }
+
+        if (remote.Sha1 is not null)
+        {
+            return ConflictPreview.Compare;
+        }
+
+        return CompareConflictingFiles(local, remote, localSha1: null) == FileMatch.SameSizeAndTime
+            ? ConflictPreview.Same
+            : ConflictPreview.Conflict;
+    }
+
     /// <summary>How a file found on both sides compares, when deciding whether it really conflicts.</summary>
     internal enum FileMatch
     {
