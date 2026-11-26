@@ -175,6 +175,16 @@ internal sealed class SyncStateStore : IDisposable
         }
     }
 
+    /// <summary>The path a node is recorded at in the base, or null.</summary>
+    public string? GetBasePath(string nodeUid)
+    {
+        lock (_lock)
+        {
+            using var command = Command("SELECT path FROM base WHERE node_uid = $uid LIMIT 1", ("$uid", nodeUid));
+            return command.ExecuteScalar() as string;
+        }
+    }
+
     /// <summary>Renames the entry for <paramref name="from"/> and everything under it to <paramref name="to"/>.</summary>
     public void MoveBaseSubtree(string from, string to)
     {

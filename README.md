@@ -293,6 +293,16 @@ side changed:
 - A folder deleted on one side is deleted on the other only if nothing in it changed there; otherwise it is
   re-created and only the unchanged items in it are deleted.
 - A file or folder moved or renamed on the server is moved locally, not downloaded again.
+- A file or folder moved or renamed locally is moved on Proton Drive, not trashed there and uploaded again. The
+  local file system gives no lasting ID to compare, so a local move is recognized by what disappeared and what
+  appeared since the last sync:
+  - a file, by the same size and modification time (moving or renaming keeps both), when no other missing or new
+    file has the same size and time;
+  - a folder, when at least half of the files it held are found unchanged inside one new folder. Anything that
+    differs inside is then synced as usual.
+
+  Anything not recognized (for example, several identical copies moved at once) is synced the old way: uploaded at
+  the new place and trashed at the old one.
 
 **Reading the output.** On a terminal, `sync` and `sync --dry-run` color each line by what it means, so
 conflicts stand out:
@@ -302,8 +312,8 @@ conflicts stand out:
 | **Bold yellow**, `CONFLICT …` | Two different versions of the same item. Both are kept; the local one is renamed to `name (conflict …)` |
 | Yellow | Needs a look: warnings, held deletions, and (dry run) same-size files that are compared by checksum when syncing |
 | Red | Moves to a trash (local or Proton Drive); bold red for failures |
-| Green | Changes sent to Proton Drive (uploads, new remote folders) |
-| Cyan | Changes made locally (downloads, new local folders, moves) |
+| Green | Changes sent to Proton Drive (uploads, new remote folders, moves on Proton Drive) |
+| Cyan | Changes made locally (downloads, new local folders, local moves) |
 | Dim | Bookkeeping that changes no files, such as identical files recorded as in sync |
 
 A dry run cannot read the server's copy of a file, so for files on both sides it reports what it can tell without
@@ -377,8 +387,8 @@ service runs is safe. If the Proton session ends, the watch service exits with c
 
 **Known limitations:**
 
-- A local rename or move is synced as a new item plus a deletion, so its content is uploaded again. (A rename
-  on the server is detected as a move.)
+- A local move is recognized from file sizes and times, not from an ID (see above). A move that is not
+  recognized is uploaded again at the new place and trashed at the old one.
 - Two folders on the same computer cannot be synced to overlapping remote folders.
 - Names are compared case-sensitively, as on Linux.
 

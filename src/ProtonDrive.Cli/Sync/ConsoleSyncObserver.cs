@@ -233,6 +233,7 @@ internal sealed class ConsoleSyncObserver(bool showProgress, bool quietWhenUpToD
         Add(plan.Count(SyncActionKind.UploadNew) + plan.Count(SyncActionKind.UploadRevision), "to upload", Ansi.ToRemote);
         Add(plan.Count(SyncActionKind.CreateLocalFolder) + plan.Count(SyncActionKind.CreateRemoteFolder), "folder(s) to create");
         Add(plan.Count(SyncActionKind.MoveLocal), "to move locally", Ansi.ToLocal);
+        Add(plan.Count(SyncActionKind.MoveRemote), "to move on Proton Drive", Ansi.ToRemote);
         Add(plan.Count(SyncActionKind.TrashLocal) + plan.Count(SyncActionKind.TrashLocalEarly), "to move to the local trash", Ansi.Danger);
         Add(plan.Count(SyncActionKind.TrashRemote) + plan.Count(SyncActionKind.TrashRemoteEarly), "to move to the Proton Drive trash", Ansi.Danger);
         var onBothSides = plan.Actions.Where(a => a.Kind is SyncActionKind.ResolveFileConflict or SyncActionKind.RenameLocalForConflict)
@@ -262,7 +263,7 @@ internal sealed class ConsoleSyncObserver(bool showProgress, bool quietWhenUpToD
             _ => Ansi.Dim(line),
         },
         SyncActionKind.TrashLocal or SyncActionKind.TrashLocalEarly or SyncActionKind.TrashRemote or SyncActionKind.TrashRemoteEarly => Ansi.Danger(line),
-        SyncActionKind.UploadNew or SyncActionKind.UploadRevision or SyncActionKind.CreateRemoteFolder => Ansi.ToRemote(line),
+        SyncActionKind.UploadNew or SyncActionKind.UploadRevision or SyncActionKind.CreateRemoteFolder or SyncActionKind.MoveRemote => Ansi.ToRemote(line),
         SyncActionKind.Download or SyncActionKind.CreateLocalFolder or SyncActionKind.MoveLocal => Ansi.ToLocal(line),
         _ => Ansi.Dim(line),
     };
@@ -270,6 +271,7 @@ internal sealed class ConsoleSyncObserver(bool showProgress, bool quietWhenUpToD
     private static string DescribePlanned(SyncAction action, bool preview = false) => action.Kind switch
     {
         SyncActionKind.MoveLocal => $"move {action.Path} -> {action.TargetPath} (moved on the server)",
+        SyncActionKind.MoveRemote => $"move /{action.Path} -> /{action.TargetPath} on Proton Drive (moved locally)",
         SyncActionKind.RenameLocalForConflict => $"CONFLICT {action.Path}: a file on one side, a folder on the other; both will be kept",
         SyncActionKind.TrashRemoteEarly or SyncActionKind.TrashRemote => $"trash /{action.Path} on Proton Drive",
         SyncActionKind.TrashLocalEarly or SyncActionKind.TrashLocal => $"move {action.Path} to the local trash",
@@ -296,6 +298,7 @@ internal sealed class ConsoleSyncObserver(bool showProgress, bool quietWhenUpToD
     private static string? DescribeDone(SyncAction action, string? note) => action.Kind switch
     {
         SyncActionKind.MoveLocal => $"Moved {action.Path} -> {action.TargetPath}",
+        SyncActionKind.MoveRemote => $"Moved /{action.Path} -> /{action.TargetPath} on Proton Drive",
         SyncActionKind.RenameLocalForConflict => $"CONFLICT {action.Path}: a file on one side, a folder on the other; {note}",
         SyncActionKind.ResolveFileConflict when IsConflict(action, note) => $"CONFLICT {action.Path}: different on both sides; {note}",
         SyncActionKind.ResolveFileConflict => $"{action.Path} is on both sides: {note}",

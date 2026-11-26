@@ -41,6 +41,9 @@ internal enum SyncActionKind
     CreateLocalFolder,
     CreateRemoteFolder,
 
+    /// <summary>An item was moved or renamed locally: move the node on the server along (phase 2, with the folders).</summary>
+    MoveRemote,
+
     Download,
     UploadNew,
     UploadRevision,
@@ -60,8 +63,16 @@ internal enum SyncActionKind
 
 internal sealed record SyncAction(SyncActionKind Kind, string Path)
 {
-    /// <summary>The destination of <see cref="SyncActionKind.MoveLocal"/>.</summary>
+    /// <summary>The destination of <see cref="SyncActionKind.MoveLocal"/> and <see cref="SyncActionKind.MoveRemote"/>.</summary>
     public string? TargetPath { get; init; }
+
+    /// <summary>
+    /// For <see cref="SyncActionKind.MoveRemote"/>: the destination's parent folder is created by this plan, so the
+    /// move waits for it; otherwise the move runs before any folder is created.
+    /// </summary>
+    public bool TargetParentIsNew { get; init; }
+
+    public bool IsMove => Kind is SyncActionKind.MoveLocal or SyncActionKind.MoveRemote;
 
     public LocalItem? Local { get; init; }
 
@@ -90,13 +101,13 @@ internal sealed record SyncAction(SyncActionKind Kind, string Path)
     {
         SyncActionKind.MoveLocal or SyncActionKind.RenameLocalForConflict => 0,
         SyncActionKind.TrashRemoteEarly or SyncActionKind.TrashLocalEarly => 1,
-        SyncActionKind.CreateLocalFolder or SyncActionKind.CreateRemoteFolder => 2,
+        SyncActionKind.CreateLocalFolder or SyncActionKind.CreateRemoteFolder or SyncActionKind.MoveRemote => 2,
         SyncActionKind.Download or SyncActionKind.UploadNew or SyncActionKind.UploadRevision or SyncActionKind.ResolveFileConflict => 3,
         SyncActionKind.TrashLocal or SyncActionKind.TrashRemote => 4,
         _ => 5,
     };
 
-    public override string ToString() => Kind == SyncActionKind.MoveLocal ? $"{Kind} {Path} -> {TargetPath}" : $"{Kind} {Path}";
+    public override string ToString() => IsMove ? $"{Kind} {Path} -> {TargetPath}" : $"{Kind} {Path}";
 }
 
 internal sealed class SyncPlan

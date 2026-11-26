@@ -200,7 +200,7 @@ public sealed class SyncPlannerTests
         SyncedFolder("a", "n1");
         Synced("a/x.txt", "n2", "r2");
         SyncedFolder("b", "n3");
-        MoveRemote("a", "b/a");
+        MoveOnServer("a", "b/a");
 
         var plan = Plan();
 
@@ -213,7 +213,7 @@ public sealed class SyncPlannerTests
     {
         Synced("old.txt", "n1", "r1");
         _local["old.txt"] = _local["old.txt"] with { Size = 7 };
-        MoveRemote("old.txt", "new.txt");
+        MoveOnServer("old.txt", "new.txt");
 
         // The edit is kept as a new file at the old path; the moved file is downloaded at its new path.
         Assert.Equal([(Download, "new.txt"), (UploadNew, "old.txt")], Kinds(Plan()));
@@ -247,6 +247,110 @@ public sealed class SyncPlannerTests
         Assert.Equal(3, plan.BaseItemCount);
     }
 
+    [Fact]
+    public void Local_rename_moves_the_remote_file_instead_of_uploading_it()
+    {
+        Synced("old.txt", "n1", "r1");
+        MoveLocally("old.txt", "new.txt");
+
+        var action = Assert.Single(Plan().Actions);
+        Assert.Equal((MoveRemote, "old.txt", "new.txt", false), (action.Kind, action.Path, action.TargetPath, action.TargetParentIsNew));
+    }
+
+    [Fact]
+    public void Local_folder_move_moves_the_remote_folder_and_syncs_what_changed_inside()
+    {
+        SyncedFolder("a", "n1");
+        Synced("a/x.txt", "n2", "r2", ticks: 1);
+        Synced("a/y.txt", "n3", "r3", ticks: 2);
+        Synced("a/z.txt", "n4", "r4", ticks: 3);
+        Synced("a/w.txt", "n6", "r6", ticks: 4);
+        SyncedFolder("b", "n5");
+        MoveLocally("a", "b/a2");
+        _local["b/a2/x.txt"] = _local["b/a2/x.txt"] with { Size = 99 };
+        _local.Remove("b/a2/z.txt");
+
+        var plan = Plan();
+
+        Assert.Equal([(MoveRemote, "a"), (UploadRevision, "b/a2/x.txt"), (TrashRemote, "b/a2/z.txt")], Kinds(plan));
+        Assert.Equal("b/a2", plan.Actions[0].TargetPath);
+    }
+
+    [Fact]
+    public void File_renamed_inside_a_moved_folder_is_moved_too()
+    {
+        SyncedFolder("a", "n1");
+        Synced("a/x.txt", "n2", "r2", ticks: 1);
+        Synced("a/y.txt", "n3", "r3", ticks: 2);
+        MoveLocally("a", "b");
+        MoveLocally("b/y.txt", "b/renamed.txt");
+
+        var plan = Plan();
+
+        Assert.Equal(
+            [(MoveRemote, "a", "b"), (MoveRemote, "b/y.txt", "b/renamed.txt")],
+            plan.Actions.Select(a => (a.Kind, a.Path, a.TargetPath!)).ToList());
+    }
+
+    [Fact]
+    public void Move_into_a_new_folder_waits_for_the_folder()
+    {
+        Synced("x.txt", "n1", "r1");
+        LocalFolder("new");
+        MoveLocally("x.txt", "new/x.txt");
+
+        var plan = Plan();
+
+        Assert.Equal([(MoveRemote, "x.txt"), (CreateRemoteFolder, "new")], Kinds(plan));
+        Assert.True(plan.Actions[0].TargetParentIsNew);
+    }
+
+    [Fact]
+    public void Files_with_the_same_size_and_time_are_not_taken_for_a_move()
+    {
+        Synced("a.txt", "n1", "r1");
+        Synced("b.txt", "n2", "r2");
+        MoveLocally("a.txt", "c.txt");
+        MoveLocally("b.txt", "d.txt");
+
+        Assert.Equal([(TrashRemote, "a.txt"), (TrashRemote, "b.txt"), (UploadNew, "c.txt"), (UploadNew, "d.txt")], Kinds(Plan()).OrderBy(k => k.Item2).ToList());
+    }
+
+    [Fact]
+    public void Deleted_file_and_a_different_new_file_are_not_a_move()
+    {
+        Synced("a.txt", "n1", "r1");
+        _local.Remove("a.txt");
+        LocalFile("b.txt", size: 10, ticks: 5000);
+
+        Assert.Equal([(UploadNew, "b.txt"), (TrashRemote, "a.txt")], Kinds(Plan()));
+    }
+
+    [Fact]
+    public void Local_move_of_a_file_changed_on_the_server_is_not_a_move()
+    {
+        Synced("a.txt", "n1", "r1");
+        _remote["a.txt"] = _remote["a.txt"] with { RevisionUid = "r2" };
+        MoveLocally("a.txt", "b.txt");
+
+        // The server's new version is kept at the old path; the local file is uploaded at its new path.
+        Assert.Equal([(Download, "a.txt"), (UploadNew, "b.txt")], Kinds(Plan()));
+    }
+
+    [Fact]
+    public void Folder_with_mostly_different_files_is_not_a_move()
+    {
+        SyncedFolder("a", "n1");
+        Synced("a/x.txt", "n2", "r2", ticks: 1);
+        Synced("a/y.txt", "n3", "r3", ticks: 2);
+        Synced("a/z.txt", "n4", "r4", ticks: 3);
+        MoveLocally("a", "b");
+        _local.Remove("b/y.txt");
+        _local.Remove("b/z.txt");
+
+        Assert.DoesNotContain(Plan().Actions, a => a.Kind == MoveRemote && a.Path == "a");
+    }
+
     private SyncPlan Plan() => SyncPlanner.Plan(_local, _remote, _base);
 
     private static List<(SyncActionKind, string)> Kinds(SyncPlan plan) => plan.Actions.Select(a => (a.Kind, a.Path)).ToList();
@@ -260,11 +364,22 @@ public sealed class SyncPlannerTests
 
     private void RemoteFolder(string path, string uid) => _remote[path] = new RemoteItem(path, IsFolder: true, uid, null, 0, null, null);
 
-    private void Synced(string path, string uid, string revision)
+    private void Synced(string path, string uid, string revision, long ticks = 1000)
     {
-        LocalFile(path);
+        LocalFile(path, ticks: ticks);
         RemoteFile(path, uid, revision);
-        _base[path] = new BaseItem(path, IsFolder: false, uid, revision, 10, 1000);
+        _base[path] = new BaseItem(path, IsFolder: false, uid, revision, 10, ticks);
+    }
+
+    private void MoveLocally(string from, string to)
+    {
+        foreach (var key in _local.Keys.Where(k => SyncPaths.IsSameOrUnder(k, from)).ToList())
+        {
+            var item = _local[key];
+            _local.Remove(key);
+            var newPath = SyncPaths.Rebase(key, from, to);
+            _local[newPath] = item with { Path = newPath };
+        }
     }
 
     private void SyncedFolder(string path, string uid)
@@ -282,7 +397,7 @@ public sealed class SyncPlannerTests
         }
     }
 
-    private void MoveRemote(string from, string to)
+    private void MoveOnServer(string from, string to)
     {
         foreach (var key in _remote.Keys.Where(k => SyncPaths.IsSameOrUnder(k, from)).ToList())
         {

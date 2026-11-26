@@ -24,6 +24,13 @@ All notable changes to protondrive-client are listed here, newest first. The for
 
   The plan summary colors its counts the same way. After a sync, the summary line says how many conflicts there were.
   Colors are off when the output is not a terminal, when `NO_COLOR` is set, or with `TERM=dumb`.
+- **Local moves and renames are moved on Proton Drive.** Before, a file or folder moved or renamed in a synced folder
+  was trashed on Proton Drive and uploaded again under the new path. Now sync moves it on the server, so nothing is
+  uploaded again and its version history and shares stay with it:
+  - a file is recognized by its size and modification time, when no other missing or new file has the same ones;
+  - a folder is recognized when at least half of its files are found unchanged in one new folder; anything that
+    differs inside is synced as usual;
+  - anything not recognized is synced as before.
 
 ### Changed
 

@@ -3,6 +3,7 @@ using System.Security.Cryptography;
 using NSkyLabs.ProtonDrive.Sync.State;
 using Proton.Drive.Sdk;
 using Proton.Drive.Sdk.Nodes;
+using Proton.Drive.Sdk.Nodes.Move;
 using Proton.Drive.Sdk.Nodes.Upload;
 
 namespace NSkyLabs.ProtonDrive.Sync;
@@ -35,6 +36,7 @@ internal sealed class SyncExecutor
     private readonly string _host = Environment.MachineName;
     private readonly DateTimeOffset _startTime = DateTimeOffset.Now;
 
+    private Dictionary<string, RemoteNodeRow>? _remoteRows;
     private int _succeeded;
     private int _failed;
 
@@ -60,12 +62,20 @@ internal sealed class SyncExecutor
         {
             if (phase.Key == 2)
             {
+                // Moves on the server whose destination folder exists already: first, in the order they were planned,
+                // since each one may move into a folder moved by an earlier one.
+                await MoveRemoteAsync(phase.Where(a => a.Kind == SyncActionKind.MoveRemote && !a.TargetParentIsNew).ToList(), cancellationToken)
+                    .ConfigureAwait(false);
+
                 // Folders: one level at a time, so parents exist before their children; the folders of one level are
-                // created several at once, since a remote creation is bound by round trips to the server.
-                foreach (var level in phase.GroupBy(a => a.Path.Count(c => c == '/')).OrderBy(g => g.Key))
+                // created several at once, since a remote creation is bound by round trips to the server. A move into a
+                // new folder runs at its destination's level, once that folder exists.
+                var rest = phase.Where(a => a.Kind != SyncActionKind.MoveRemote || a.TargetParentIsNew);
+                foreach (var level in rest.GroupBy(a => SyncPaths.Depth(a.TargetPath ?? a.Path)).OrderBy(g => g.Key))
                 {
+                    await MoveRemoteAsync(level.Where(a => a.Kind == SyncActionKind.MoveRemote).ToList(), cancellationToken).ConfigureAwait(false);
                     await Parallel.ForEachAsync(
-                        level,
+                        level.Where(a => a.Kind != SyncActionKind.MoveRemote),
                         new ParallelOptions { MaxDegreeOfParallelism = MaxParallelFolderCreations, CancellationToken = cancellationToken },
                         async (action, ct) => await RunAsync(action, ct).ConfigureAwait(false)).ConfigureAwait(false);
                 }
@@ -149,6 +159,135 @@ internal sealed class SyncExecutor
         _state.MoveBaseSubtree(action.Path, action.TargetPath!);
         return null;
     }
+
+    /// <summary>
+    /// Moves nodes on the server, for items moved locally. Consecutive moves into the same folder go in one request.
+    /// </summary>
+    private async Task MoveRemoteAsync(List<SyncAction> moves, CancellationToken cancellationToken)
+    {
+        var start = 0;
+        while (start < moves.Count)
+        {
+            var parent = SyncPaths.GetParent(moves[start].TargetPath!);
+            var end = start + 1;
+            while (end < moves.Count && SyncPaths.GetParent(moves[end].TargetPath!) == parent)
+            {
+                end++;
+            }
+
+            await MoveRemoteBatchAsync(moves[start..end], parent, cancellationToken).ConfigureAwait(false);
+            start = end;
+        }
+    }
+
+    private async Task MoveRemoteBatchAsync(List<SyncAction> batch, string targetParent, CancellationToken cancellationToken)
+    {
+        void Fail(SyncAction action, Exception ex)
+        {
+            Interlocked.Increment(ref _failed);
+            _observer.ActionFailed(action, ex);
+        }
+
+        string targetParentUid;
+        try
+        {
+            targetParentUid = GetParentFolderUid(batch[0].TargetPath!);
+        }
+        catch (ChangedDuringSyncException ex)
+        {
+            batch.ForEach(a => Fail(a, ex));
+            return;
+        }
+
+        var rows = GetRemoteRows();
+        var byUid = new Dictionary<string, SyncAction>(StringComparer.Ordinal);
+        var requests = new List<NodeMoveItem>();
+
+        foreach (var action in batch)
+        {
+            var uid = action.Base!.NodeUid;
+            if (!rows.TryGetValue(uid, out var row) || row.ParentUid is null || row.Name is null)
+            {
+                Fail(action, new ChangedDuringSyncException($"/{action.Path} is no longer known on Proton Drive"));
+                continue;
+            }
+
+            byUid[uid] = action;
+            requests.Add(new NodeMoveItem(NodeUid.Parse(uid), NodeUid.Parse(row.ParentUid), row.Name, SyncPaths.GetName(action.TargetPath!)));
+        }
+
+        if (requests.Count == 0)
+        {
+            return;
+        }
+
+        try
+        {
+            await foreach (var result in _client.MoveNodesAsync(requests, NodeUid.Parse(targetParentUid), cancellationToken).ConfigureAwait(false))
+            {
+                var uid = result.NodeUid.ToString();
+                if (!byUid.Remove(uid, out var action))
+                {
+                    continue;
+                }
+
+                if (result.Result.TryGetError(out var error))
+                {
+                    Fail(action, error);
+                    continue;
+                }
+
+                RecordRemoteMove(action, uid, targetParentUid, rows);
+                Interlocked.Increment(ref _succeeded);
+                _observer.ActionSucceeded(action, null);
+            }
+        }
+        catch (Exception ex) when (ex is not OperationCanceledException || !cancellationToken.IsCancellationRequested)
+        {
+            foreach (var action in byUid.Values)
+            {
+                Fail(action, ex);
+            }
+
+            return;
+        }
+
+        foreach (var action in byUid.Values)
+        {
+            Fail(action, new InvalidOperationException("Proton Drive did not report a result for the move"));
+        }
+    }
+
+    private void RecordRemoteMove(SyncAction action, string uid, string targetParentUid, Dictionary<string, RemoteNodeRow> rows)
+    {
+        var target = action.TargetPath!;
+
+        var row = rows[uid] with { ParentUid = targetParentUid, Name = SyncPaths.GetName(target) };
+        rows[uid] = row;
+        _state.UpsertRemote(row);
+
+        // The base holds the node at its current path, which earlier moves in this pass may have changed.
+        _state.MoveBaseSubtree(_state.GetBasePath(uid) ?? action.Path, target);
+
+        if (row.IsFolder)
+        {
+            // Folders inside move along: their paths change, and nothing must go to the old paths any more.
+            var oldPath = _folderUids.FirstOrDefault(f => f.Value == uid).Key;
+            if (oldPath is not null)
+            {
+                foreach (var (path, folderUid) in _folderUids.Where(f => SyncPaths.IsSameOrUnder(f.Key, oldPath)).ToList())
+                {
+                    _folderUids.TryRemove(path, out _);
+                    _folderUids[SyncPaths.Rebase(path, oldPath, target)] = folderUid;
+                }
+            }
+
+            _folderUids[target] = uid;
+        }
+    }
+
+    private Dictionary<string, RemoteNodeRow> GetRemoteRows() =>
+        _remoteRows ??= _state.LoadRemote().ToDictionary(r => r.Uid, StringComparer.Ordinal);
 
     private string? RenameForConflict(string path)
     {
