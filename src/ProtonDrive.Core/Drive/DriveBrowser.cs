@@ -1,3 +1,4 @@
+using NSkyLabs.ProtonDrive.Core.Diagnostics;
 using NSkyLabs.ProtonDrive.Core.Auth;
 using Proton.Drive.Sdk;
 using Proton.Drive.Sdk.Nodes;
@@ -37,6 +38,7 @@ internal sealed class DriveBrowser(ProtonDriveClient client)
     /// </summary>
     public async Task<Node> ResolveAsync(RemotePath path, CancellationToken cancellationToken, List<Node>? ancestors = null)
     {
+        using var activity = Activity.Begin($"Looking up {path} on Proton Drive");
         Node current = await client.GetMyFilesFolderAsync(cancellationToken).ConfigureAwait(false);
 
         for (var i = 0; i < path.Segments.Count; i++)

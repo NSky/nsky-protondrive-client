@@ -26,6 +26,7 @@ internal sealed class TransferProgress : IAsyncDisposable
     private readonly List<FileTransfer> _active = [];
     private readonly CancellationTokenSource _stopRendering = new();
     private readonly Task _renderLoop;
+    private readonly IDisposable? _activitySuspension;
 
     private long _transferredBytes;
     private int _completedFiles;
@@ -38,6 +39,7 @@ internal sealed class TransferProgress : IAsyncDisposable
         _totalBytes = totalBytes;
         _enabled = enabled;
         _interactive = enabled && !Console.IsErrorRedirected;
+        _activitySuspension = _interactive ? ActivityStatus.Suspend() : null;
         _renderLoop = _interactive ? RenderLoopAsync(_stopRendering.Token) : Task.CompletedTask;
     }
 
@@ -116,6 +118,7 @@ internal sealed class TransferProgress : IAsyncDisposable
         }
 
         _stopRendering.Dispose();
+        _activitySuspension?.Dispose();
     }
 
     public static string FormatBytes(long bytes)

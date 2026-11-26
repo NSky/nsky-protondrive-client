@@ -1,3 +1,4 @@
+using NSkyLabs.ProtonDrive.Core.Diagnostics;
 using NSkyLabs.ProtonDrive.Core.Auth;
 using NSkyLabs.ProtonDrive.Cli.Terminal;
 using Proton.Drive.Sdk;
@@ -109,17 +110,20 @@ internal static class UploadCommand
         var root = new RemoteFolder(targetDisplayPath, targetFolder.Uid, Existing: targetFolder);
 
         // Pending local folders, with the remote folder their contents go into.
+        using var activity = Activity.Begin("Comparing local items with Proton Drive", "items");
         var pending = new Queue<(IReadOnlyList<FileSystemInfo> Entries, RemoteFolder Parent)>();
         pending.Enqueue(([File.Exists(localPath) ? new FileInfo(localPath) : new DirectoryInfo(localPath)], root));
 
         while (pending.TryDequeue(out var current))
         {
+            activity.SetDetail(current.Parent.DisplayPath);
             var remoteChildren = current.Parent.Existing is { } existingFolder
                 ? await ListByNameAsync(browser, existingFolder, cancellationToken).ConfigureAwait(false)
                 : null;
 
             foreach (var entry in current.Entries)
             {
+                activity.Increment();
                 var name = entry.Name;
                 var remoteDisplayPath = $"{current.Parent.DisplayPath}/{name}";
 
@@ -223,8 +227,11 @@ internal static class UploadCommand
     private static async Task CreateFoldersAsync(ProtonDriveClient client, UploadPlan plan, CancellationToken cancellationToken)
     {
         // Parents come before their children, so each parent's UID is known when the child is created.
+        using var activity = Activity.Begin("Creating folders on Proton Drive", "folders");
+        activity.SetTotal(plan.FoldersToCreate.Count);
         foreach (var folder in plan.FoldersToCreate)
         {
+            activity.SetDetail(folder.DisplayPath);
             var parentUid = folder.Parent!.Uid ?? throw new InvalidOperationException($"Parent of {folder.DisplayPath} was not created.");
 
             try
@@ -232,6 +239,7 @@ internal static class UploadCommand
                 var created = await client.CreateFolderAsync(parentUid, folder.Name!, folder.LastModificationTime, cancellationToken)
                     .ConfigureAwait(false);
                 folder.Uid = created.Uid;
+                activity.Increment();
             }
             catch (NodeWithSameNameExistsException)
             {

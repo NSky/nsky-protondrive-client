@@ -1,4 +1,5 @@
 using System.Globalization;
+using NSkyLabs.ProtonDrive.Core.Diagnostics;
 using NSkyLabs.ProtonDrive.Core.IO;
 using NSkyLabs.ProtonDrive.Sync.State;
 using Proton.Drive.Sdk;
@@ -140,8 +141,15 @@ internal sealed class SyncEngine(ProtonDriveClient client, ISyncObserver observe
             return (new SyncPassResult(SyncPassOutcome.NotChecked), false);
         }
 
-        var remote = remoteTree.GetSnapshot(_ignoreRules);
+        RemoteSnapshot remote;
+        using (Activity.Begin("Loading the remote listing from the sync state"))
+        {
+            remote = remoteTree.GetSnapshot(_ignoreRules);
+        }
+
         var local = LocalScanner.Scan(pair.LocalPath, _ignoreRules);
+
+        using var comparing = Activity.Begin($"Comparing {local.Items.Count:N0} local and {remote.Items.Count:N0} remote items");
         var baseItems = state.LoadBase();
 
         foreach (var warning in remote.Warnings.Concat(local.Warnings).Distinct())
@@ -173,6 +181,8 @@ internal sealed class SyncEngine(ProtonDriveClient client, ISyncObserver observe
         var decision = options.Force
             ? SafetyDecision.Allow(plan)
             : SyncSafety.Check(plan, local.Items.Count, remote.Items.Count);
+
+        comparing.Dispose();
 
         if (decision.Refusal is { } refusal)
         {

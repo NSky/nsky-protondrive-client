@@ -192,6 +192,20 @@ All namespaces start with `NSkyLabs.ProtonDrive`.
 
 Remote paths are relative to My files: `Docs/2024` and `/Docs/2024` are the same.
 
+**What it is doing right now.** Every command shows its current step while it works, so a long, silent step
+(listing a large remote folder, scanning a big local folder, creating many folders) visibly progresses. On a
+terminal this is one status line at the bottom with a spinner, the step, a counter, the elapsed time and the item
+being worked on:
+
+```text
+⠹ Listing the remote folder on Proton Drive: 48,210 items (3:12) · Photos/2019/Summer
+```
+
+It appears only once a step takes longer than a moment, and disappears when the command prints something or a
+transfer display takes over. `--no-progress` (or `-q`) turns it off. When stderr is not a terminal (scripts, the
+systemd journal), a step that runs longer than 30 seconds prints a line every 30 seconds instead, e.g.
+`Still listing the remote folder on Proton Drive: 48,210 items (3:00) · Photos/2019`.
+
 `download`:
 
 - A **file** is saved into `<local-folder>` (created if needed). An existing local file is never overwritten.

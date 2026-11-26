@@ -1,3 +1,5 @@
+using NSkyLabs.ProtonDrive.Core.Diagnostics;
+
 namespace NSkyLabs.ProtonDrive.Sync;
 
 /// <summary>Result of a local scan.</summary>
@@ -17,12 +19,14 @@ internal static class LocalScanner
         var items = new Dictionary<string, LocalItem>(StringComparer.Ordinal);
         var excluded = new List<string>();
         var warnings = new List<string>();
+        using var activity = Activity.Begin($"Scanning the local folder {root}", "items");
 
         var pending = new Stack<(DirectoryInfo Directory, string Path)>();
         pending.Push((new DirectoryInfo(root), string.Empty));
 
         while (pending.TryPop(out var current))
         {
+            activity.SetDetail(current.Path);
             List<FileSystemInfo> entries;
             try
             {
@@ -37,6 +41,7 @@ internal static class LocalScanner
 
             foreach (var entry in entries)
             {
+                activity.Increment();
                 var name = entry.Name;
                 if (current.Path.Length == 0 && SyncPaths.IsEngineEntry(name))
                 {

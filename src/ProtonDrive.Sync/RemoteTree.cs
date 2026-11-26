@@ -1,3 +1,4 @@
+using NSkyLabs.ProtonDrive.Core.Diagnostics;
 using NSkyLabs.ProtonDrive.Sync.State;
 using Proton.Sdk;
 using Proton.Drive.Sdk;
@@ -41,6 +42,7 @@ internal sealed class RemoteTree(ProtonDriveClient client, SyncStateStore state,
 
     public async Task<RemoteRefreshResult> RefreshAsync(CancellationToken cancellationToken)
     {
+        using var activity = Activity.Begin("Checking Proton Drive for changes", "events");
         var root = await GetRootAsync(cancellationToken).ConfigureAwait(false);
         var cursor = state.GetMeta(CursorKey);
 
@@ -58,6 +60,7 @@ internal sealed class RemoteTree(ProtonDriveClient client, SyncStateStore state,
         await foreach (var driveEvent in client.EnumerateEventsAsync(root.TreeEventScopeId, (DriveEventId)cursor, cancellationToken).ConfigureAwait(false))
         {
             lastEventId = driveEvent.Id.ToString();
+            activity.Increment();
 
             switch (driveEvent)
             {
@@ -110,11 +113,14 @@ internal sealed class RemoteTree(ProtonDriveClient client, SyncStateStore state,
         var found = new HashSet<string>(StringComparer.Ordinal);
         var newFolders = new List<FolderNode>();
 
+        using var fetching = Activity.Begin("Fetching changed items from Proton Drive", "items");
+        fetching.SetTotal(toFetch.Count);
         await foreach (var node in client.EnumerateNodesAsync(toFetch.Select(NodeUid.Parse).ToAsyncEnumerable(), cancellationToken).ConfigureAwait(false))
         {
             var uid = node.Uid.ToString();
             found.Add(uid);
             upserts.Add(ToRow(node));
+            fetching.Increment();
 
             // A folder moved into the tree (or restored from the trash) brings children that produced no events.
             if (node is FolderNode folder && node.TrashTime is null && !known.Contains(uid))
@@ -131,6 +137,7 @@ internal sealed class RemoteTree(ProtonDriveClient client, SyncStateStore state,
         // Nodes that could not be fetched no longer exist (or are no longer accessible).
         toDelete.UnionWith(toFetch.Where(uid => !found.Contains(uid)));
 
+        using var saving = Activity.Begin("Saving the changes to the sync state");
         state.ApplyRemoteChanges(upserts, toDelete, lastEventId);
         PruneUnreachable();
 
@@ -261,6 +268,7 @@ internal sealed class RemoteTree(ProtonDriveClient client, SyncStateStore state,
     private async Task FullScanAsync(FolderNode root, CancellationToken cancellationToken)
     {
         // Take the cursor first: anything that changes during the scan is replayed by the next refresh.
+        using var activity = Activity.Begin("Reading the Proton Drive events cursor");
         string? cursor = null;
         await foreach (var driveEvent in client.EnumerateEventsAsync(root.TreeEventScopeId, cursorEventId: null, cancellationToken).ConfigureAwait(false))
         {
@@ -275,17 +283,20 @@ internal sealed class RemoteTree(ProtonDriveClient client, SyncStateStore state,
         var rows = new List<RemoteNodeRow> { ToRow(root) with { ParentUid = null } };
         await ScanSubtreeAsync(root, rows, cancellationToken).ConfigureAwait(false);
 
+        using var saving = Activity.Begin($"Saving the remote listing ({rows.Count:N0} items) to the sync state");
         state.ReplaceRemote(rows, cursor);
     }
 
     private async Task ScanSubtreeAsync(FolderNode folder, List<RemoteNodeRow> rows, CancellationToken cancellationToken)
     {
-        var pending = new Queue<FolderNode>();
-        pending.Enqueue(folder);
+        using var activity = Activity.Begin("Listing the remote folder on Proton Drive", "items");
+        var pending = new Queue<(FolderNode Folder, string Path)>();
+        pending.Enqueue((folder, string.Empty));
 
         while (pending.TryDequeue(out var current))
         {
-            var childUids = client.EnumerateFolderChildrenNodeUidsAsync(current.Uid, cancellationToken);
+            activity.SetDetail(current.Path);
+            var childUids = client.EnumerateFolderChildrenNodeUidsAsync(current.Folder.Uid, cancellationToken);
             await foreach (var child in client.EnumerateNodesAsync(childUids, cancellationToken).ConfigureAwait(false))
             {
                 if (child.TrashTime is not null)
@@ -293,10 +304,12 @@ internal sealed class RemoteTree(ProtonDriveClient client, SyncStateStore state,
                     continue;
                 }
 
+                activity.Increment();
                 rows.Add(ToRow(child));
                 if (child is FolderNode childFolder)
                 {
-                    pending.Enqueue(childFolder);
+                    var name = child.Name.TryGetValue(out var decrypted) ? decrypted : "?";
+                    pending.Enqueue((childFolder, SyncPaths.Combine(current.Path, name)));
                 }
             }
         }

@@ -1,3 +1,4 @@
+using NSkyLabs.ProtonDrive.Core.Diagnostics;
 using System.Globalization;
 using NSkyLabs.ProtonDrive.Core.Auth;
 using Proton.Drive.Sdk.Nodes;
@@ -20,9 +21,11 @@ internal static class ListCommand
         if (node is FolderNode folder)
         {
             entries = [];
+            using var activity = Activity.Begin($"Listing {path}", "items");
             await foreach (var child in browser.ListChildrenAsync(folder, cancellationToken).ConfigureAwait(false))
             {
                 entries.Add(child);
+                activity.Increment();
             }
         }
         else

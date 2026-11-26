@@ -8,6 +8,7 @@ internal static class ConsolePrompt
     {
         Console.Error.Write(prompt);
         var line = Console.ReadLine() ?? throw new OperationCanceledException("Input stream closed.");
+        ActivityStatus.InputLineEnded();
         return line.Trim();
     }
 
@@ -33,6 +34,7 @@ internal static class ConsolePrompt
         if (Console.IsInputRedirected)
         {
             var line = Console.ReadLine() ?? throw new OperationCanceledException("Input stream closed.");
+            ActivityStatus.InputLineEnded();
             return Encoding.UTF8.GetBytes(line);
         }
 

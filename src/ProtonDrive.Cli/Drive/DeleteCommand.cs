@@ -1,3 +1,4 @@
+using NSkyLabs.ProtonDrive.Core.Diagnostics;
 using NSkyLabs.ProtonDrive.Core.Auth;
 using NSkyLabs.ProtonDrive.Cli.Terminal;
 using NSkyLabs.ProtonDrive.Sync;
@@ -100,6 +101,7 @@ internal static class DeleteCommand
         var uids = targets.Select(t => t.Node.Uid).ToList();
         var byUid = targets.ToDictionary(t => t.Node.Uid.ToString(), StringComparer.Ordinal);
 
+        using var activity = Activity.Begin(permanent ? "Deleting on Proton Drive" : "Moving to the Proton Drive trash");
         var trashFailures = await RunAsync(browser.Client.TrashNodesAsync(uids, cancellationToken), byUid, "move to trash").ConfigureAwait(false);
 
         var failures = trashFailures;

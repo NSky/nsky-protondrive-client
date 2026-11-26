@@ -1,3 +1,4 @@
+using NSkyLabs.ProtonDrive.Core.Diagnostics;
 using NSkyLabs.ProtonDrive.Core.Auth;
 using NSkyLabs.ProtonDrive.Cli.Terminal;
 using Proton.Drive.Sdk;
@@ -118,15 +119,18 @@ internal static class DownloadCommand
         var plan = new DownloadPlan(localFolder);
         Directory.CreateDirectory(localFolder);
 
+        using var activity = Activity.Begin($"Listing {remotePath} on Proton Drive", "items");
         var pending = new Queue<(FolderNode Folder, string RemoteDisplayPath, string LocalPath)>();
         pending.Enqueue((root, remotePath.IsRoot ? string.Empty : remotePath.ToString(), localFolder));
 
         while (pending.TryDequeue(out var current))
         {
+            activity.SetDetail(current.RemoteDisplayPath);
             var usedLocalNames = new HashSet<string>(OperatingSystem.IsLinux() ? StringComparer.Ordinal : StringComparer.OrdinalIgnoreCase);
 
             await foreach (var child in browser.ListChildrenAsync(current.Folder, cancellationToken).ConfigureAwait(false))
             {
+                activity.Increment();
                 if (!child.Name.TryGetValue(out var remoteName))
                 {
                     plan.Skipped.Add($"{current.RemoteDisplayPath}/{DriveBrowser.GetName(child)}");
