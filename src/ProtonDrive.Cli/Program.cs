@@ -140,6 +140,20 @@ try
             return await DeleteCommand.RunAsync(context, positional, flags.Overlaps(["--recursive", "-r"]), flags.Contains("--permanent"), flags.Overlaps(["--yes", "-y"]), cts.Token);
         }
 
+        case "move":
+        case "mv":
+        {
+            var positional = args.Skip(1).Where(a => !a.StartsWith('-')).ToArray();
+            if (positional.Length < 2 || args.Skip(1).Any(a => a.StartsWith('-')))
+            {
+                Console.Error.WriteLine(MoveCommand.Usage);
+                return 2;
+            }
+
+            var context = await auth.ResumeAsync(cts.Token);
+            return await MoveCommand.RunAsync(context, positional, cts.Token);
+        }
+
         case "sync":
             return await SyncCommand.RunAsync(auth, args[1..], cts.Token);
 
@@ -253,6 +267,9 @@ static void PrintHelp()
                                         Upload a file or a folder into an existing remote folder
                                         (default: the root). Nothing on the server is overwritten:
                                         if any name already exists, nothing is uploaded
+          move | mv <source>... <destination>
+                                        Move files or folders into an existing folder, or move/rename one
+                                        item to a new path. Nothing is overwritten
           delete | rm <remote-path>... [-r|--recursive] [--permanent] [-y|--yes]
                                         Move files or folders to the Proton Drive trash (or delete them
                                         permanently with --permanent). Folders need --recursive.
