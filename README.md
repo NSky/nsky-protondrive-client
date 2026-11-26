@@ -153,6 +153,11 @@ installer, and publishes them with `SHA256SUMS` as a GitHub release (not marked 
 packages, each of the four packages must grant this repository read access (package settings, **Manage Actions
 access**).
 
+The release notes are the version's section of `CHANGELOG.md`, followed by a link to the full list of changes since
+the previous version and the beta notice; `packaging/release-notes.sh <version>` prints them. Before tagging, change
+the version's heading from `Unreleased` to the release date (`## [0.2.7] - 2026-11-27`): the workflow refuses a tag
+whose section is missing or still marked `Unreleased`, before building anything.
+
 After publishing the release, the workflow updates the AUR package
 [`nsky-protondrive-client-bin`](https://aur.archlinux.org/packages/nsky-protondrive-client-bin) with
 `packaging/aur/update-aur.sh`. In an Arch Linux container, the script sets the new `pkgver`, computes the

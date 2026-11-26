@@ -8,6 +8,9 @@ name: Release
 # package (Proton.Sdk, Proton.Drive.Sdk, Proton.Drive.Sdk.Account, Proton.Cryptography) grants this repository
 # access: package settings > Manage Actions access > add this repository with the Read role.
 #
+# The release notes are the version's section of CHANGELOG.md (packaging/release-notes.sh). The tag is refused if
+# that section is missing or still marked "Unreleased", so date its heading before tagging.
+#
 # After the release is published, the "aur" job updates the AUR package nsky-protondrive-client-bin
 # (packaging/aur/update-aur.sh). It needs the repository secret AUR_SSH_PRIVATE_KEY: the private half of an SSH key
 # whose public half is added to the AUR account that maintains the package. Optional repository variables
@@ -53,6 +56,14 @@ jobs:
             exit 1
           fi
 
+      - name: Check the changelog section for the release notes
+        if: startsWith(github.ref, 'refs/tags/v')
+        run: |
+          if ! packaging/release-notes.sh "${GITHUB_REF_NAME#v}" > /dev/null 2> notes-error.txt; then
+            echo "::error::$(cat notes-error.txt)"
+            exit 1
+          fi
+
       - name: Test
         run: make test
 
@@ -79,6 +90,8 @@ jobs:
     if: startsWith(github.ref, 'refs/tags/v')
     runs-on: ubuntu-latest
     steps:
+      - uses: actions/checkout@v4
+
       - uses: actions/download-artifact@v4
         with:
           path: dist
@@ -91,10 +104,11 @@ jobs:
         env:
           GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
         run: |
+          packaging/release-notes.sh "${GITHUB_REF_NAME#v}" > "$RUNNER_TEMP/notes.md"
           gh release create "$GITHUB_REF_NAME" dist/* \
             --repo "$GITHUB_REPOSITORY" \
             --title "protondrive ${GITHUB_REF_NAME#v}" \
-            --notes "Beta release, provided as is, without warranty. Unofficial; not affiliated with Proton AG. See the README's Install section and Disclaimer."
+            --notes-file "$RUNNER_TEMP/notes.md"
 
   aur:
     name: Update the AUR package

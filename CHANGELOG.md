@@ -15,6 +15,8 @@ All notable changes to protondrive-client are listed here, newest first. The for
 
 - **Easier-to-read help.** `protondrive help` groups the commands (account, files, sync, background sync), lists
   each command's options under it, shows aliases as "also: …", and puts the notice at the end.
+- **Release notes on GitHub list the changes.** Each release now shows its section of this changelog, with a link to
+  the full list of changes since the previous release.
 - **`-q` / `--no-progress` work with every command.** `ls`, `mkdir`, `move` and `delete` used to reject them.
 
 ### Fixed
