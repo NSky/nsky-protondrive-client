@@ -11,6 +11,12 @@ All notable changes to protondrive-client are listed here, newest first. The for
   - `-p` (`--parents`) also creates missing parent folders, and accepts folders that already exist;
   - a name taken by a file is reported, and the file is never replaced.
 
+### Changed
+
+- **Easier-to-read help.** `protondrive help` groups the commands (account, files, sync, background sync), lists
+  each command's options under it, shows aliases as "also: …", and puts the notice at the end.
+- **`-q` / `--no-progress` work with every command.** `ls`, `mkdir`, `move` and `delete` used to reject them.
+
 ### Fixed
 
 - **`move` and `upload` no longer say a name is blocked by an item in the trash.** A trashed item does not hold its

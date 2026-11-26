@@ -27,6 +27,9 @@ var sessionStore = new SessionStore(AppInfo.ConfigDirectory);
 var auth = new AuthService(sessionStore);
 var command = args.Length > 0 ? args[0] : "help";
 
+// The progress flags only turn off the status line here; commands without a transfer display ignore them.
+var commandArgs = args.Where(a => a is not ("--no-progress" or "-q" or "--quiet")).ToArray();
+
 try
 {
     switch (command)
@@ -82,7 +85,7 @@ try
         case "list":
         {
             var context = await auth.ResumeAsync(cts.Token);
-            return await ListCommand.RunAsync(context, args.Length > 1 ? args[1] : null, cts.Token);
+            return await ListCommand.RunAsync(context, commandArgs.Length > 1 ? commandArgs[1] : null, cts.Token);
         }
 
         case "download":
@@ -124,8 +127,8 @@ try
         case "delete":
         case "rm":
         {
-            var flags = args.Skip(1).Where(a => a.StartsWith('-')).ToHashSet(StringComparer.Ordinal);
-            var positional = args.Skip(1).Where(a => !a.StartsWith('-')).ToArray();
+            var flags = commandArgs.Skip(1).Where(a => a.StartsWith('-')).ToHashSet(StringComparer.Ordinal);
+            var positional = commandArgs.Skip(1).Where(a => !a.StartsWith('-')).ToArray();
             var unknownFlags = flags.Except(["--recursive", "-r", "--permanent", "--yes", "-y"]).ToArray();
 
             if (positional.Length == 0 || unknownFlags.Length > 0)
@@ -141,8 +144,8 @@ try
         case "move":
         case "mv":
         {
-            var positional = args.Skip(1).Where(a => !a.StartsWith('-')).ToArray();
-            if (positional.Length < 2 || args.Skip(1).Any(a => a.StartsWith('-')))
+            var positional = commandArgs.Skip(1).Where(a => !a.StartsWith('-')).ToArray();
+            if (positional.Length < 2 || commandArgs.Skip(1).Any(a => a.StartsWith('-')))
             {
                 Console.Error.WriteLine(MoveCommand.Usage);
                 return 2;
@@ -154,8 +157,8 @@ try
 
         case "mkdir":
         {
-            var flags = args.Skip(1).Where(a => a.StartsWith('-')).ToHashSet(StringComparer.Ordinal);
-            var positional = args.Skip(1).Where(a => !a.StartsWith('-')).ToArray();
+            var flags = commandArgs.Skip(1).Where(a => a.StartsWith('-')).ToHashSet(StringComparer.Ordinal);
+            var positional = commandArgs.Skip(1).Where(a => !a.StartsWith('-')).ToArray();
 
             if (positional.Length == 0 || flags.Except(["--parents", "-p"]).Any())
             {
@@ -260,48 +263,68 @@ static string DescribeApiError(ProtonApiException ex)
 
 static void PrintHelp()
 {
+    // Bold headings on a terminal; plain text when piped or with NO_COLOR.
+    var bold = !Console.IsOutputRedirected
+        && string.IsNullOrEmpty(Environment.GetEnvironmentVariable("NO_COLOR"))
+        && Environment.GetEnvironmentVariable("TERM") != "dumb";
+    string H(string text) => bold ? $"\u001b[1m{text}\u001b[0m" : text;
+
+    var name = AppInfo.CommandName;
+    var notice = string.Join(Environment.NewLine, AppInfo.Disclaimer.Split('\n').Select(line => "  " + line.TrimEnd('\r')));
     Console.WriteLine($"""
-        {AppInfo.CommandName} {AppInfo.Version} (beta) - unofficial Proton Drive command-line client
+        {H($"{name} {AppInfo.Version}")} (beta): an unofficial command-line client for Proton Drive
 
-        {AppInfo.Disclaimer}
+        {H("Usage:")} {name} <command> [arguments] [options]
+        Remote paths are in My files and start with /, for example /Documents/report.pdf.
 
-        Usage: {AppInfo.CommandName} <command> [options]
+        {H("Account")}
+          login                       Sign in; the password, 2FA code and mailbox password are asked for
+              -u, --username <name>     the account to sign in with
+          whoami                      Show the signed-in account and check the session (also: status)
+          logout                      Sign out and remove the saved credentials
 
-        Commands:
-          login [-u|--username <name>]  Sign in (password, 2FA and mailbox password are prompted)
-          whoami | status               Show the signed-in account and verify the session
-          logout                        End the session on the server and remove local credentials
-          ls | list [path]              List a folder in My files (one level; default: the root)
-          download | get <remote-path> <local-folder> [--no-progress]
-                                        Download a file into <local-folder>, or a folder's contents
-                                        into <local-folder> (which must be empty or not exist)
-          upload | put <local-path> [remote-folder] [--no-progress]
-                                        Upload a file or a folder into an existing remote folder
-                                        (default: the root). Nothing on the server is overwritten:
-                                        if any name already exists, nothing is uploaded
-          mkdir <remote-path>... [-p|--parents]
-                                        Create folders. With --parents, missing parent folders are
-                                        created too and existing folders are fine
-          move | mv <source>... <destination>
-                                        Move files or folders into an existing folder, or move/rename one
-                                        item to a new path. Nothing is overwritten
-          delete | rm <remote-path>... [-r|--recursive] [--permanent] [-y|--yes]
-                                        Move files or folders to the Proton Drive trash (or delete them
-                                        permanently with --permanent). Folders need --recursive.
-                                        Asks first unless --yes is given
-          sync add <local-folder> <remote-folder>
-                                        Keep a local folder and a remote folder in sync
-          sync remove <local-folder|id> Stop syncing a folder (no files are changed)
-          sync list | sync status       Show synced folders and their last sync
-          sync [<local-folder|id>] [--watch] [--dry-run] [--force] [--no-progress]
-                                        Sync all folders (or one) once, or keep syncing with --watch.
-                                        --dry-run shows the plan; --force skips the safety checks
-          service enable [--timer] | disable | status
-                                        Sync in the background as a systemd user service, also after
-                                        logging out (continuously, or every 15 minutes with --timer)
-          version                       Print version information
-          help                          Show this help
+        {H("Files on Proton Drive")}
+          ls [path]                   List a folder, one level (default: the root; also: list)
+          download <path> <folder>    Download a file, or a folder's contents, into a local folder;
+                                      the folder must be empty or not exist yet (also: get)
+          upload <local-path> [path]  Upload a file or folder into an existing folder (default: the root);
+                                      if any name already exists there, nothing is uploaded (also: put)
+          mkdir <path>...             Create folders
+              -p, --parents             also create missing parent folders; existing folders are fine
+          move <source>... <dest>     Move items into a folder, or move or rename one item; nothing is
+                                      ever overwritten (also: mv)
+          delete <path>...            Move files or folders to the Proton Drive trash; asks first (also: rm)
+              -r, --recursive           needed to delete a folder
+              --permanent               delete permanently instead of moving to the trash
+              -y, --yes                 do not ask first
 
-        Session and sync settings are stored in {AppInfo.ConfigDirectory}, sync state in {AppInfo.StateDirectory}
+        {H("Sync")}
+          sync add <folder> <path>    Start syncing a local folder with a folder on Proton Drive
+          sync remove <folder|id>     Stop syncing a folder; no files are changed
+          sync list                   Show synced folders and their last sync (also: sync status)
+          sync [<folder|id>]          Sync all folders, or one, once
+              --watch                   keep syncing until stopped
+              -n, --dry-run             only show what would be done
+              --force                   skip the safety checks for large deletions
+
+        {H("Background sync")}
+          service enable              Keep syncing as a systemd user service, also after logging out
+              --timer                   sync every 15 minutes instead of continuously
+          service disable             Stop background sync
+          service status              Show the state of background sync
+
+        {H("Other")}
+          version                     Show version information
+          help                        Show this help
+
+        {H("Options for all commands")}
+          -q, --no-progress           No status line or progress display
+
+        {H("Files")}
+          Settings and session: {AppInfo.ConfigDirectory}
+          Sync state:           {AppInfo.StateDirectory}
+
+        {H("Notice")}
+        {notice}
         """);
 }
