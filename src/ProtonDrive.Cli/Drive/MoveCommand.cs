@@ -154,9 +154,9 @@ internal static class MoveCommand
         var problems = new List<string>();
         var destinationChain = destinationAncestors.Select(a => a.Uid.ToString()).ToHashSet(StringComparer.Ordinal);
 
-        // Names in the target folder, trashed items included: a trashed item still holds its name.
+        // Names in the target folder. Items in the trash are left out: they do not hold their names.
         var taken = new Dictionary<string, Node>(StringComparer.Ordinal);
-        await foreach (var child in browser.ListChildrenAsync(targetFolder, cancellationToken, includeTrashed: true).ConfigureAwait(false))
+        await foreach (var child in browser.ListChildrenAsync(targetFolder, cancellationToken).ConfigureAwait(false))
         {
             if (child.Name.TryGetValue(out var name))
             {
@@ -182,9 +182,7 @@ internal static class MoveCommand
                 else
                 {
                     var kind = existing is FolderNode ? "a folder" : "a file";
-                    problems.Add(existing.TrashTime is null
-                        ? $"{target} already exists ({kind})."
-                        : $"{target} is taken by {kind} in the trash: empty the trash or restore and rename it first.");
+                    problems.Add($"{target} already exists ({kind}).");
                 }
             }
         }

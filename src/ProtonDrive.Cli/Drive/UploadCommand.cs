@@ -161,7 +161,7 @@ internal static class UploadCommand
                             };
                             plan.FoldersToCreate.Add(folder);
                         }
-                        else if (existing is FolderNode existingChild && existingChild.TrashTime is null)
+                        else if (existing is FolderNode existingChild)
                         {
                             // Merge into the existing folder: only its files are checked for collisions.
                             folder = new RemoteFolder(remoteDisplayPath, existingChild.Uid, existingChild);
@@ -196,22 +196,17 @@ internal static class UploadCommand
     }
 
     /// <summary>
-    /// Lists a remote folder's children by exact name, trashed items included: a trashed item can still block a
-    /// name, and reporting it is safer than letting the upload fail halfway.
+    /// Lists a remote folder's children by exact name. Items in the trash are left out: they do not hold their names.
     /// </summary>
     private static async Task<Dictionary<string, Node>> ListByNameAsync(DriveBrowser browser, FolderNode folder, CancellationToken cancellationToken)
     {
         var byName = new Dictionary<string, Node>(StringComparer.Ordinal);
 
-        await foreach (var child in browser.ListChildrenAsync(folder, cancellationToken, includeTrashed: true).ConfigureAwait(false))
+        await foreach (var child in browser.ListChildrenAsync(folder, cancellationToken).ConfigureAwait(false))
         {
             if (child.Name.TryGetValue(out var name))
             {
-                // Prefer a live item over a trashed one with the same name.
-                if (!byName.TryGetValue(name, out var previous) || previous.TrashTime is not null)
-                {
-                    byName[name] = child;
-                }
+                byName[name] = child;
             }
         }
 
@@ -221,7 +216,7 @@ internal static class UploadCommand
     private static string DescribeConflict(string remoteDisplayPath, Node existing)
     {
         var kind = existing is FolderNode ? "folder" : "file";
-        return existing.TrashTime is null ? $"{remoteDisplayPath} ({kind})" : $"{remoteDisplayPath} ({kind} in the trash)";
+        return $"{remoteDisplayPath} ({kind})";
     }
 
     private static async Task CreateFoldersAsync(ProtonDriveClient client, UploadPlan plan, CancellationToken cancellationToken)

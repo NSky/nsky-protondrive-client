@@ -152,6 +152,21 @@ try
             return await MoveCommand.RunAsync(context, positional, cts.Token);
         }
 
+        case "mkdir":
+        {
+            var flags = args.Skip(1).Where(a => a.StartsWith('-')).ToHashSet(StringComparer.Ordinal);
+            var positional = args.Skip(1).Where(a => !a.StartsWith('-')).ToArray();
+
+            if (positional.Length == 0 || flags.Except(["--parents", "-p"]).Any())
+            {
+                Console.Error.WriteLine(MkdirCommand.Usage);
+                return 2;
+            }
+
+            var context = await auth.ResumeAsync(cts.Token);
+            return await MkdirCommand.RunAsync(context, positional, flags.Overlaps(["--parents", "-p"]), cts.Token);
+        }
+
         case "sync":
             return await SyncCommand.RunAsync(auth, args[1..], cts.Token);
 
@@ -264,6 +279,9 @@ static void PrintHelp()
                                         Upload a file or a folder into an existing remote folder
                                         (default: the root). Nothing on the server is overwritten:
                                         if any name already exists, nothing is uploaded
+          mkdir <remote-path>... [-p|--parents]
+                                        Create folders. With --parents, missing parent folders are
+                                        created too and existing folders are fine
           move | mv <source>... <destination>
                                         Move files or folders into an existing folder, or move/rename one
                                         item to a new path. Nothing is overwritten

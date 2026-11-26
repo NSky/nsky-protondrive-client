@@ -7,6 +7,14 @@ All notable changes to protondrive-client are listed here, newest first. The for
 
 ### Added
 
+- **`mkdir` command** to create folders on Proton Drive, like `mkdir`:
+  - `-p` (`--parents`) also creates missing parent folders, and accepts folders that already exist;
+  - a name taken by a file is reported, and the file is never replaced.
+
+### Fixed
+
+- **`move` and `upload` no longer say a name is blocked by an item in the trash.** A trashed item does not hold its
+  name on Proton Drive, so the help text and the checks no longer mention it.
 - **Local moves and renames are moved on Proton Drive.** Before, a file or folder moved or renamed in a synced folder
   was trashed on Proton Drive and uploaded again under the new path. Now sync moves it on the server, so nothing is
   uploaded again and its version history and shares stay with it:

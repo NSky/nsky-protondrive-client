@@ -36,6 +36,7 @@ folders.
 | Download a file or folder (`download`) | ✅ |
 | Upload a file or folder (`upload`), never overwriting | ✅ |
 | Delete files or folders (`delete`): to the trash, or permanently | ✅ |
+| Create folders (`mkdir`) | ✅ |
 | Move or rename files and folders (`move`), never overwriting | ✅ |
 | Bidirectional sync of local folders (`sync`), once or continuously (`--watch`) | ✅ |
 
@@ -187,6 +188,7 @@ All namespaces start with `NSkyLabs.ProtonDrive`.
 | `ls [path]` | List one level of a folder in My files (default: the root) |
 | `download <remote-path> <local-folder> [--no-progress]` | Download a file or a folder |
 | `upload <local-path> [remote-folder] [--no-progress]` | Upload a file or a folder |
+| `mkdir <remote-path>... [-p]` | Create folders; `-p` also creates missing parent folders |
 | `move <source>... <destination>` | Move files or folders into a folder, or move or rename one item |
 | `delete <remote-path>... [-r] [--permanent] [-y]` | Move files or folders to the Proton Drive trash, or delete them permanently |
 | `sync add <local-folder> <remote-folder>` | Keep a local folder and a remote folder in sync |
@@ -231,7 +233,7 @@ systemd journal), a step that runs longer than 30 seconds prints a line every 30
   `[remote-folder]/<folder name>`. `[remote-folder]` must already exist; the default is the root of My files.
 - **Nothing on the server is overwritten.** Before anything is sent, every name is checked against the server.
   If any file already exists there, or a local folder name is taken by a remote file, the conflicts are listed
-  and nothing is uploaded. Trashed items count as conflicts too: empty the trash or rename them first.
+  and nothing is uploaded. Items in the Proton Drive trash do not count: they do not block a name.
 - A remote folder with the same name as a local folder is reused, so new files can be added to an existing
   folder tree, as long as none of the files are already there.
 - If an item appears on the server after the check, the server rejects it and it is reported as failed.
@@ -239,6 +241,14 @@ systemd journal), a step that runs longer than 30 seconds prints a line every 30
 - Symbolic links are skipped. Modification times are preserved. Up to 4 files upload in parallel, with the
   same progress display and retries as `download`.
 - Exit code 1 if there were conflicts or any file failed, 130 if cancelled with Ctrl+C.
+
+`mkdir`, like `mkdir`:
+
+- Creates each folder: `protondrive mkdir /Projects/2026 /Archive`.
+- The parent folder must exist, and the folder must not, unless `--parents` (`-p`) is given: then missing parent
+  folders are created too, and a folder that already exists is fine (`protondrive mkdir -p /Projects/2026/Q1`).
+- A name taken by a file is reported, and the file is not replaced. Items in the trash do not block a name.
+- Exit code 1 if any folder could not be created.
 
 `move` (also `mv`), like `mv`:
 
@@ -248,8 +258,7 @@ systemd journal), a step that runs longer than 30 seconds prints a line every 30
   last part is the new name. In the same folder that is a rename: `protondrive move /Docs/old.txt /Docs/new.txt`.
 - Folders are moved with everything in them; no flag is needed, and nothing is copied or uploaded again.
 - **Nothing is overwritten.** Every path and target name is checked first. If a source is missing, a target name is
-  taken (also by an item in the trash), or a folder would move into itself, the problems are listed and nothing is
-  moved.
+  taken, or a folder would move into itself, the problems are listed and nothing is moved.
 - For items in synced folders, you are told what the next sync does: it moves the local copy along, moves it to the
   local trash if the item left the synced folder, or downloads it if the item moved in.
 - Exit code 1 if anything could not be moved.
