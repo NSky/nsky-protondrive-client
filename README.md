@@ -237,6 +237,12 @@ side changed:
 - An edit wins over a deletion: a file edited on one side and deleted on the other is restored.
 - A file changed on both sides is compared by content (SHA-1). If it differs, both are kept: the local copy is
   renamed to `name (conflict <host> <date time>).ext` and uploaded, and the remote version is downloaded.
+  If the server has no SHA-1 for the file (some uploaders don't store one), a matching size and modification
+  time (within a second) counts as the same file.
+- Adding a folder that already holds a copy of the remote files (made with another tool) is safe: the first
+  pass matches identical files as above without transferring them, and copies files that exist on only one side
+  to the other. Files deleted on one side since that copy was made come back, so tidy up first, and check
+  with `sync --dry-run`.
 - A folder deleted on one side is deleted on the other only if nothing in it changed there; otherwise it is
   re-created and only the unchanged items in it are deleted.
 - A file or folder moved or renamed on the server is moved locally, not downloaded again.

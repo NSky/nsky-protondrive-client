@@ -366,17 +366,67 @@ internal sealed class SyncExecutor
         var local = action.Local!;
         var remote = action.Remote!;
 
-        if (local.Size == remote.Size && remote.Sha1 is not null)
+        var localSha1 = local.Size == remote.Size && remote.Sha1 is not null
+            ? await ComputeSha1Async(FullPath(action.Path), cancellationToken).ConfigureAwait(false)
+            : null;
+
+        switch (CompareConflictingFiles(local, remote, localSha1))
         {
-            var localSha1 = await ComputeSha1Async(FullPath(action.Path), cancellationToken).ConfigureAwait(false);
-            if (string.Equals(localSha1, remote.Sha1, StringComparison.OrdinalIgnoreCase))
-            {
+            case FileMatch.SameContent:
                 _state.UpsertBase(new BaseItem(action.Path, IsFolder: false, remote.NodeUid, remote.RevisionUid, local.Size, local.ModifiedTicks));
                 return "same content on both sides";
-            }
+            case FileMatch.SameSizeAndTime:
+                _state.UpsertBase(new BaseItem(action.Path, IsFolder: false, remote.NodeUid, remote.RevisionUid, local.Size, local.ModifiedTicks));
+                return "same size and modification time on both sides (the server has no checksum for it)";
+            default:
+                return RenameForConflict(action.Path);
+        }
+    }
+
+    /// <summary>How a file found on both sides compares, when deciding whether it really conflicts.</summary>
+    internal enum FileMatch
+    {
+        Different,
+
+        /// <summary>Same size and SHA-1.</summary>
+        SameContent,
+
+        /// <summary>The server has no SHA-1 for the file, but size and modification time match.</summary>
+        SameSizeAndTime,
+    }
+
+    /// <summary>Largest modification time difference still treated as equal: other tools often keep only whole seconds.</summary>
+    internal static readonly TimeSpan ModificationTimeTolerance = TimeSpan.FromSeconds(1);
+
+    /// <summary>
+    /// Decides whether a file present on both sides is the same file. The SHA-1 decides when the server has one
+    /// (<paramref name="localSha1"/> is then the local file's hash, or null when sizes differ). Without one, a
+    /// matching size and modification time is taken as the same file, so that adding a folder already copied by
+    /// another tool does not produce conflict copies of every file.
+    /// </summary>
+    internal static FileMatch CompareConflictingFiles(LocalItem local, RemoteItem remote, string? localSha1)
+    {
+        if (local.Size != remote.Size)
+        {
+            return FileMatch.Different;
         }
 
-        return RenameForConflict(action.Path);
+        if (remote.Sha1 is not null)
+        {
+            return localSha1 is not null && string.Equals(localSha1, remote.Sha1, StringComparison.OrdinalIgnoreCase)
+                ? FileMatch.SameContent
+                : FileMatch.Different;
+        }
+
+        if (remote.Modified is not { } remoteModified)
+        {
+            return FileMatch.Different;
+        }
+
+        var localModified = new DateTimeOffset(local.ModifiedTicks, TimeSpan.Zero);
+        return (localModified - remoteModified).Duration() <= ModificationTimeTolerance
+            ? FileMatch.SameSizeAndTime
+            : FileMatch.Different;
     }
 
     private string? RecordBase(SyncAction action)
