@@ -37,7 +37,7 @@
   <g transform="translate(548 136)">
     <rect width="104" height="40" rx="20" fill="#f59e0b" fill-opacity="0.14" stroke="#f59e0b" stroke-width="2"/>
     <text x="52" y="27" text-anchor="middle" font-family="Noto Sans, DejaVu Sans, sans-serif" font-size="19"
-          font-weight="700" letter-spacing="2" fill="#fbbf24">ALPHA</text>
+          font-weight="700" letter-spacing="2" fill="#fbbf24">BETA</text>
   </g>
   <text x="80" y="228" font-family="Noto Sans, DejaVu Sans, sans-serif" font-size="27" fill="#94a3b8">Unofficial command-line client for Proton Drive, with two-way folder sync</text>
 

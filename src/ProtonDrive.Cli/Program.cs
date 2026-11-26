@@ -232,7 +232,7 @@ static string DescribeApiError(ProtonApiException ex)
 static void PrintHelp()
 {
     Console.WriteLine($"""
-        {AppInfo.CommandName} {AppInfo.Version} (alpha) - unofficial Proton Drive command-line client
+        {AppInfo.CommandName} {AppInfo.Version} (beta) - unofficial Proton Drive command-line client
 
         {AppInfo.Disclaimer}
 

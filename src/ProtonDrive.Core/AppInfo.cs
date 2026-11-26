@@ -7,11 +7,11 @@ internal static class AppInfo
     public const string CommandName = "protondrive";
 
     /// <summary>One-line form of <see cref="Disclaimer"/>.</summary>
-    public const string ShortNotice = "ALPHA software, provided as is. Unofficial; not affiliated with Proton AG.";
+    public const string ShortNotice = "BETA software, provided as is. Unofficial; not affiliated with Proton AG.";
 
     /// <summary>Shown in the help text, at login and when a folder is added for sync.</summary>
     public const string Disclaimer = """
-        ALPHA VERSION. This is unofficial, third-party software. It is not affiliated with, endorsed by or
+        BETA VERSION. This is unofficial, third-party software. It is not affiliated with, endorsed by or
         supported by Proton AG. It is provided "as is", without warranty of any kind, and the authors accept no
         responsibility or liability for any loss of data, damage to your account or other harm resulting from its
         use. Keep independent backups of anything important.
@@ -24,7 +24,7 @@ internal static class AppInfo
     /// Value of the <c>x-pm-appversion</c> header. Proton requires third-party clients to identify themselves
     /// honestly using the shape <c>external-drive-{name}@{semver}-{channel}</c>.
     /// </summary>
-    public static string ProtonAppVersion { get; } = $"external-drive-nsky_protondrive@{Version}-alpha";
+    public static string ProtonAppVersion { get; } = $"external-drive-nsky_protondrive@{Version}-beta";
 
     public static string UserAgent { get; } = $"{CommandName}/{Version} ({Environment.OSVersion.Platform})";
 

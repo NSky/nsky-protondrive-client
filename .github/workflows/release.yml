@@ -94,8 +94,7 @@ jobs:
           gh release create "$GITHUB_REF_NAME" dist/* \
             --repo "$GITHUB_REPOSITORY" \
             --title "protondrive ${GITHUB_REF_NAME#v}" \
-            --prerelease \
-            --notes "Alpha release, provided as is, without warranty. Unofficial; not affiliated with Proton AG. See the README's Install section and Disclaimer."
+            --notes "Beta release, provided as is, without warranty. Unofficial; not affiliated with Proton AG. See the README's Install section and Disclaimer."
 
   aur:
     name: Update the AUR package

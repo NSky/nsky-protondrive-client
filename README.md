@@ -5,7 +5,7 @@ Unofficial command-line client for Proton Drive, written in C# on top of the
 folders.
 
 > [!WARNING]
-> **Alpha version.** This is unofficial, third-party software. It is not affiliated with, endorsed by or
+> **Beta version.** This is unofficial, third-party software. It is not affiliated with, endorsed by or
 > supported by Proton AG; "Proton" and "Proton Drive" are trademarks of Proton AG. It is provided "as is",
 > without warranty of any kind, and the authors accept no responsibility or liability for any loss of data,
 > damage to your account or other harm resulting from its use. The sync feature changes and deletes files on
@@ -144,7 +144,7 @@ The development build is `src/ProtonDrive.Cli/bin/Debug/net10.0/protondrive`.
 
 Pushing a tag `v<version>` (matching `<Version>` in `Directory.Build.props`) runs
 `.github/workflows/release.yml`. It builds and tests x86-64 and ARM64 archives on Ubuntu 22.04, smoke-tests the
-installer, and publishes them with `SHA256SUMS` as a GitHub pre-release. For the workflow to read the `Proton.*`
+installer, and publishes them with `SHA256SUMS` as a GitHub release (not marked as a pre-release). For the workflow to read the `Proton.*`
 packages, each of the four packages must grant this repository read access (package settings, **Manage Actions
 access**).
 
@@ -350,12 +350,12 @@ refreshing again.
 
 ## Application identification
 
-Requests carry `x-pm-appversion: external-drive-nsky_protondrive@<version>-alpha`, as required by
+Requests carry `x-pm-appversion: external-drive-nsky_protondrive@<version>-beta`, as required by
 Proton's [third-party usage guidelines](https://github.com/ProtonDriveApps/sdk#usage-guidelines-for-personal-projects).
 
 ## Disclaimer
 
-This software is an **alpha version** under active development. Expect bugs, and expect behaviour and stored
+This software is a **beta version** under active development. Expect bugs, and expect behaviour and stored
 data formats to change between versions.
 
 - It is an **unofficial, third-party client**. It is not affiliated with, endorsed by, sponsored by or supported
