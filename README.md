@@ -109,10 +109,13 @@ the service starts at boot and keeps running after the user logs out. If the sys
 The Proton packages are not published on nuget.org. They come from the GitHub Packages feed
 `https://nuget.pkg.github.com/NSky/index.json`, where GitHub Actions workflows in two forks publish them:
 
-| Package | Built from | Version setting in `Directory.Build.props` |
-| --- | --- | --- |
-| `Proton.Sdk`, `Proton.Drive.Sdk`, `Proton.Drive.Sdk.Account` | [NSky/proton-drive-sdk](https://github.com/NSky/proton-drive-sdk) | `ProtonDriveSdkPackageVersion` |
-| `Proton.Cryptography` (linux-x64, linux-arm64, win-x64, osx-arm64, osx-x64) | [NSky/proton-dotnet-crypto](https://github.com/NSky/proton-dotnet-crypto) | `ProtonCryptographyPackageVersion` |
+| Package | Built from |
+| --- | --- |
+| `Proton.Sdk`, `Proton.Drive.Sdk`, `Proton.Drive.Sdk.Account` | [NSky/proton-drive-sdk](https://github.com/NSky/proton-drive-sdk) |
+| `Proton.Cryptography` (linux-x64, linux-arm64, win-x64, osx-arm64, osx-x64) | [NSky/proton-dotnet-crypto](https://github.com/NSky/proton-dotnet-crypto) |
+
+Their versions are set in `src/ProtonDrive.Core/ProtonDrive.Core.csproj`, like any other package version (`Proton.Sdk`
+comes with `Proton.Drive.Sdk`). Keep `Proton.Drive.Sdk` and `Proton.Drive.Sdk.Account` at the same version.
 
 `nuget.config` sends every `Proton.*` package to that feed and everything else to nuget.org.
 
