@@ -321,7 +321,10 @@ the log:
 All of them disappear by themselves once the problem is resolved.
 
 **Finding changes.** Remote changes come from the Drive events feed: the first pass lists the whole remote
-folder, later passes fetch only the events since the last one. Local changes are found by a scan of names,
+folder, later passes fetch only the events since the last one. The full listing (also used by `download`) goes
+one folder level at a time: the contents of up to 8 folders are listed at once, and the details of a whole level
+are fetched together, up to 50 items per request. New remote folders are likewise created a level at a time, up
+to 8 at once. Local changes are found by a scan of names,
 sizes and modification times (no file content is read). With `--watch`, file system events trigger a pass a few
 seconds after changes settle, the events feed is polled every 30 seconds, and a full scan runs every 15 minutes.
 

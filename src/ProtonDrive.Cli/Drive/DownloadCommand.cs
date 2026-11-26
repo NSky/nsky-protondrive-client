@@ -119,53 +119,58 @@ internal static class DownloadCommand
         var plan = new DownloadPlan(localFolder);
         Directory.CreateDirectory(localFolder);
 
+        // Level by level, with the details of each level fetched in large batches (see RemoteTreeWalker).
         using var activity = Activity.Begin($"Listing {remotePath} on Proton Drive", "items");
-        var pending = new Queue<(FolderNode Folder, string RemoteDisplayPath, string LocalPath)>();
-        pending.Enqueue((root, remotePath.IsRoot ? string.Empty : remotePath.ToString(), localFolder));
+        var nameComparer = OperatingSystem.IsLinux() ? StringComparer.Ordinal : StringComparer.OrdinalIgnoreCase;
 
-        while (pending.TryDequeue(out var current))
-        {
-            activity.SetDetail(current.RemoteDisplayPath);
-            var usedLocalNames = new HashSet<string>(OperatingSystem.IsLinux() ? StringComparer.Ordinal : StringComparer.OrdinalIgnoreCase);
-
-            await foreach (var child in browser.ListChildrenAsync(current.Folder, cancellationToken).ConfigureAwait(false))
+        await RemoteTreeWalker.WalkAsync(
+            browser.Client,
+            root,
+            new LocalTarget(remotePath.IsRoot ? string.Empty : remotePath.ToString(), localFolder, new HashSet<string>(nameComparer)),
+            (child, parent) =>
             {
                 activity.Increment();
                 if (!child.Name.TryGetValue(out var remoteName))
                 {
-                    plan.Skipped.Add($"{current.RemoteDisplayPath}/{DriveBrowser.GetName(child)}");
-                    continue;
+                    plan.Skipped.Add($"{parent.RemoteDisplayPath}/{DriveBrowser.GetName(child)}");
+                    return null;
                 }
 
-                var childRemotePath = $"{current.RemoteDisplayPath}/{remoteName}";
-                var localName = MakeUnique(LocalNames.ToLocalName(remoteName), usedLocalNames);
-                var childLocalPath = Path.Combine(current.LocalPath, localName);
+                var childRemotePath = $"{parent.RemoteDisplayPath}/{remoteName}";
+                var localName = MakeUnique(LocalNames.ToLocalName(remoteName), parent.UsedLocalNames);
+                var childLocalPath = Path.Combine(parent.LocalPath, localName);
                 LocalNames.EnsureInside(localFolder, childLocalPath);
 
                 switch (child)
                 {
-                    case FolderNode childFolder:
+                    case FolderNode:
                         Directory.CreateDirectory(childLocalPath);
-                        pending.Enqueue((childFolder, childRemotePath, childLocalPath));
-                        break;
+                        activity.SetDetail(childRemotePath);
+                        return new LocalTarget(childRemotePath, childLocalPath, new HashSet<string>(nameComparer));
 
                     case FileNode file when ContentlessMediaTypes.Contains(file.MediaType):
                         plan.Skipped.Add($"{childRemotePath} (Proton Docs/Sheets document, no file content)");
-                        break;
+                        return null;
 
                     case FileNode file:
                         plan.Files.Add(new FileToDownload(file, childRemotePath, childLocalPath));
-                        break;
+                        return null;
 
                     default:
                         plan.Skipped.Add($"{childRemotePath} (unsupported item type)");
-                        break;
+                        return null;
                 }
-            }
-        }
+            },
+            cancellationToken).ConfigureAwait(false);
 
+        // Items arrive in no particular order within a level; list and download in path order.
+        plan.Files.Sort((a, b) => string.CompareOrdinal(a.RemotePath, b.RemotePath));
+        plan.Skipped.Sort(StringComparer.Ordinal);
         return plan;
     }
+
+    /// <summary>A remote folder being listed, the local folder its contents go into, and the local names used there.</summary>
+    private sealed record LocalTarget(string RemoteDisplayPath, string LocalPath, HashSet<string> UsedLocalNames);
 
     private static string MakeUnique(string name, HashSet<string> used)
     {

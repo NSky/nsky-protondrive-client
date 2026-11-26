@@ -226,10 +226,26 @@ internal static class UploadCommand
 
     private static async Task CreateFoldersAsync(ProtonDriveClient client, UploadPlan plan, CancellationToken cancellationToken)
     {
-        // Parents come before their children, so each parent's UID is known when the child is created.
+        // One level at a time, so each parent's UID is known when its children are created; the folders of one level
+        // are created several at once, since each creation is bound by round trips to the server.
         using var activity = Activity.Begin("Creating folders on Proton Drive", "folders");
         activity.SetTotal(plan.FoldersToCreate.Count);
-        foreach (var folder in plan.FoldersToCreate)
+        foreach (var level in plan.FoldersToCreate.GroupBy(f => f.DisplayPath.Count(c => c == '/')).OrderBy(g => g.Key))
+        {
+            await Parallel.ForEachAsync(
+                level,
+                new ParallelOptions { MaxDegreeOfParallelism = RemoteTreeWalker.ListingParallelism, CancellationToken = cancellationToken },
+                async (folder, ct) => await CreateFolderAsync(client, folder, activity, ct).ConfigureAwait(false)).ConfigureAwait(false);
+        }
+
+        if (plan.FoldersToCreate.Count > 0)
+        {
+            Console.Error.WriteLine($"Created {plan.FoldersToCreate.Count} folder(s).");
+        }
+    }
+
+    private static async Task CreateFolderAsync(ProtonDriveClient client, RemoteFolder folder, ActivityStep activity, CancellationToken cancellationToken)
+    {
         {
             activity.SetDetail(folder.DisplayPath);
             var parentUid = folder.Parent!.Uid ?? throw new InvalidOperationException($"Parent of {folder.DisplayPath} was not created.");
@@ -246,11 +262,6 @@ internal static class UploadCommand
                 throw new UploadTargetException(
                     $"{folder.DisplayPath} appeared on Proton Drive after the check. Stopped; nothing was overwritten.");
             }
-        }
-
-        if (plan.FoldersToCreate.Count > 0)
-        {
-            Console.Error.WriteLine($"Created {plan.FoldersToCreate.Count} folder(s).");
         }
     }
 

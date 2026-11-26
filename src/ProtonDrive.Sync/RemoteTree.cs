@@ -1,3 +1,4 @@
+using NSkyLabs.ProtonDrive.Core.Drive;
 using NSkyLabs.ProtonDrive.Core.Diagnostics;
 using NSkyLabs.ProtonDrive.Sync.State;
 using Proton.Sdk;
@@ -289,30 +290,27 @@ internal sealed class RemoteTree(ProtonDriveClient client, SyncStateStore state,
 
     private async Task ScanSubtreeAsync(FolderNode folder, List<RemoteNodeRow> rows, CancellationToken cancellationToken)
     {
+        // Level by level, with the details of each level fetched in large batches (see RemoteTreeWalker).
         using var activity = Activity.Begin("Listing the remote folder on Proton Drive", "items");
-        var pending = new Queue<(FolderNode Folder, string Path)>();
-        pending.Enqueue((folder, string.Empty));
 
-        while (pending.TryDequeue(out var current))
-        {
-            activity.SetDetail(current.Path);
-            var childUids = client.EnumerateFolderChildrenNodeUidsAsync(current.Folder.Uid, cancellationToken);
-            await foreach (var child in client.EnumerateNodesAsync(childUids, cancellationToken).ConfigureAwait(false))
+        await RemoteTreeWalker.WalkAsync(
+            client,
+            folder,
+            string.Empty,
+            (child, parentPath) =>
             {
-                if (child.TrashTime is not null)
-                {
-                    continue;
-                }
-
                 activity.Increment();
                 rows.Add(ToRow(child));
-                if (child is FolderNode childFolder)
+                if (child is not FolderNode)
                 {
-                    var name = child.Name.TryGetValue(out var decrypted) ? decrypted : "?";
-                    pending.Enqueue((childFolder, SyncPaths.Combine(current.Path, name)));
+                    return null;
                 }
-            }
-        }
+
+                var path = SyncPaths.Combine(parentPath, child.Name.TryGetValue(out var name) ? name : "?");
+                activity.SetDetail(path);
+                return path;
+            },
+            cancellationToken).ConfigureAwait(false);
     }
 
     /// <summary>Removes rows that no longer connect to the root (moved out of the tree, or orphaned by a deletion).</summary>

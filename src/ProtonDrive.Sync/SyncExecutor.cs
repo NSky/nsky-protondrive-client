@@ -21,6 +21,8 @@ internal sealed class ChangedDuringSyncException(string message) : Exception(mes
 internal sealed class SyncExecutor
 {
     private const int MaxParallelTransfers = 4;
+
+    private const int MaxParallelFolderCreations = 8;
     private const int MaxTransferAttempts = 4;
 
     private readonly ProtonDriveClient _client;
@@ -56,7 +58,19 @@ internal sealed class SyncExecutor
     {
         foreach (var phase in plan.Actions.GroupBy(a => a.Phase).OrderBy(g => g.Key))
         {
-            if (phase.Key == 3)
+            if (phase.Key == 2)
+            {
+                // Folders: one level at a time, so parents exist before their children; the folders of one level are
+                // created several at once, since a remote creation is bound by round trips to the server.
+                foreach (var level in phase.GroupBy(a => a.Path.Count(c => c == '/')).OrderBy(g => g.Key))
+                {
+                    await Parallel.ForEachAsync(
+                        level,
+                        new ParallelOptions { MaxDegreeOfParallelism = MaxParallelFolderCreations, CancellationToken = cancellationToken },
+                        async (action, ct) => await RunAsync(action, ct).ConfigureAwait(false)).ConfigureAwait(false);
+                }
+            }
+            else if (phase.Key == 3)
             {
                 await Parallel.ForEachAsync(
                     phase,
