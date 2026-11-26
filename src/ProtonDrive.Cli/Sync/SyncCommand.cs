@@ -169,8 +169,6 @@ internal static class SyncCommand
         }
 
         Console.WriteLine($"Run '{AppInfo.CommandName} sync' to sync now, or '{AppInfo.CommandName} sync --watch' to keep it in sync.");
-        Console.WriteLine();
-        Console.WriteLine("Sync changes and deletes files on both sides. " + AppInfo.Disclaimer);
         return 0;
     }
 
@@ -378,7 +376,7 @@ internal static class SyncCommand
         var engine = new SyncEngine(DriveBrowser.Create(context).Client, observer, reporter.Attention);
         reporter.UpdateStatus();
 
-        Console.Error.WriteLine($"{AppInfo.CommandName} {AppInfo.Version}: {AppInfo.ShortNotice}");
+        Console.Error.WriteLine($"{AppInfo.CommandName} {AppInfo.Version}");
         Console.Error.WriteLine($"Watching {pairs.Count} folder(s). Press Ctrl+C to stop.");
         foreach (var pair in pairs)
         {

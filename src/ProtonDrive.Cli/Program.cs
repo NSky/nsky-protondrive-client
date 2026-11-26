@@ -34,8 +34,6 @@ try
         case "login":
         {
             var username = GetOption(args, "--username", "-u");
-            Console.Error.WriteLine(AppInfo.Disclaimer);
-            Console.Error.WriteLine();
             var context = await auth.LoginAsync(new ConsoleLoginPrompter(), username, cts.Token);
             var address = await context.AccountClient.GetCurrentUserDefaultAddressAsync(cts.Token);
             Console.WriteLine($"Logged in as {context.Session.Username} <{address.EmailAddress}>.");
@@ -163,7 +161,6 @@ try
         case "version":
         case "--version":
             Console.WriteLine($"{AppInfo.CommandName} {AppInfo.Version} ({AppInfo.ProtonAppVersion})");
-            Console.WriteLine(AppInfo.ShortNotice);
             return 0;
 
         case "help":

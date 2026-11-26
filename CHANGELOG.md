@@ -27,6 +27,10 @@ All notable changes to protondrive-client are listed here, newest first. The for
 
 ### Changed
 
+- **Quieter commands.** The beta and "provided as is" notice is now shown only in the help text
+  (`protondrive help`). `login`, `sync add`, `version` and `sync --watch` no longer print it.
+- **Social preview image:** the beta badge and the word "Unofficial" are gone; "Not affiliated with Proton AG"
+  stays.
 - **Clearer dry runs for files on both sides.** A dry run no longer lists every file present on both sides as
   "changed on both sides". It now tells them apart without reading file contents:
   - a different size is reported as a certain conflict, with both sizes;

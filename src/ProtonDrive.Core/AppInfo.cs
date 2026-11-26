@@ -6,10 +6,7 @@ internal static class AppInfo
 {
     public const string CommandName = "protondrive";
 
-    /// <summary>One-line form of <see cref="Disclaimer"/>.</summary>
-    public const string ShortNotice = "BETA software, provided as is. Unofficial; not affiliated with Proton AG.";
-
-    /// <summary>Shown in the help text, at login and when a folder is added for sync.</summary>
+    /// <summary>Shown in the help text (<c>protondrive help</c>) only.</summary>
     public const string Disclaimer = """
         BETA VERSION. This is unofficial, third-party software. It is not affiliated with, endorsed by or
         supported by Proton AG. It is provided "as is", without warranty of any kind, and the authors accept no
