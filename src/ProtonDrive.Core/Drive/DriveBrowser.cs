@@ -31,13 +31,18 @@ internal sealed class DriveBrowser(ProtonDriveClient client)
         return new DriveBrowser(client);
     }
 
-    /// <summary>Resolves <paramref name="path"/> to a node, walking one folder level at a time.</summary>
-    public async Task<Node> ResolveAsync(RemotePath path, CancellationToken cancellationToken)
+    /// <summary>
+    /// Resolves <paramref name="path"/> to a node, walking one folder level at a time. If <paramref name="ancestors"/>
+    /// is given, the folders walked through (from the root of My files down to the parent) are added to it.
+    /// </summary>
+    public async Task<Node> ResolveAsync(RemotePath path, CancellationToken cancellationToken, List<Node>? ancestors = null)
     {
         Node current = await client.GetMyFilesFolderAsync(cancellationToken).ConfigureAwait(false);
 
         for (var i = 0; i < path.Segments.Count; i++)
         {
+            ancestors?.Add(current);
+
             if (current is not FolderNode)
             {
                 throw new RemotePathNotFoundException(path, $"'{GetName(current)}' is not a folder");

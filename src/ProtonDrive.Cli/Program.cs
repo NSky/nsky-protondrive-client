@@ -120,6 +120,23 @@ try
             return await UploadCommand.RunAsync(context, positional[0], positional.ElementAtOrDefault(1), showProgress, cts.Token);
         }
 
+        case "delete":
+        case "rm":
+        {
+            var flags = args.Skip(1).Where(a => a.StartsWith('-')).ToHashSet(StringComparer.Ordinal);
+            var positional = args.Skip(1).Where(a => !a.StartsWith('-')).ToArray();
+            var unknownFlags = flags.Except(["--recursive", "-r", "--permanent", "--yes", "-y"]).ToArray();
+
+            if (positional.Length == 0 || unknownFlags.Length > 0)
+            {
+                Console.Error.WriteLine(DeleteCommand.Usage);
+                return 2;
+            }
+
+            var context = await auth.ResumeAsync(cts.Token);
+            return await DeleteCommand.RunAsync(context, positional, flags.Overlaps(["--recursive", "-r"]), flags.Contains("--permanent"), flags.Overlaps(["--yes", "-y"]), cts.Token);
+        }
+
         case "sync":
             return await SyncCommand.RunAsync(auth, args[1..], cts.Token);
 
@@ -233,6 +250,10 @@ static void PrintHelp()
                                         Upload a file or a folder into an existing remote folder
                                         (default: the root). Nothing on the server is overwritten:
                                         if any name already exists, nothing is uploaded
+          delete | rm <remote-path>... [-r|--recursive] [--permanent] [-y|--yes]
+                                        Move files or folders to the Proton Drive trash (or delete them
+                                        permanently with --permanent). Folders need --recursive.
+                                        Asks first unless --yes is given
           sync add <local-folder> <remote-folder>
                                         Keep a local folder and a remote folder in sync
           sync remove <local-folder|id> Stop syncing a folder (no files are changed)

@@ -14,10 +14,10 @@
     <ImplicitUsings>enable</ImplicitUsings>
     <Deterministic>true</Deterministic>
 
-    <Version>0.2.2</Version>
+    <Version>0.2.3</Version>
     <Authors>NSky Labs</Authors>
     <Product>protondrive-client</Product>
-    <Description>Unofficial, alpha-quality Proton Drive command-line client with folder sync. Not affiliated with Proton AG. Provided as is, without warranty.</Description>
+    <Description>Unofficial Proton Drive command-line client with folder sync. Not affiliated with Proton AG. Provided as is, without warranty.</Description>
   </PropertyGroup>
 
 </Project>

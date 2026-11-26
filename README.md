@@ -35,6 +35,7 @@ folders.
 | List a folder (`ls`) | ✅ |
 | Download a file or folder (`download`) | ✅ |
 | Upload a file or folder (`upload`), never overwriting | ✅ |
+| Delete files or folders (`delete`): to the trash, or permanently | ✅ |
 | Bidirectional sync of local folders (`sync`), once or continuously (`--watch`) | ✅ |
 
 ## Install
@@ -182,6 +183,7 @@ All namespaces start with `NSkyLabs.ProtonDrive`.
 | `ls [path]` | List one level of a folder in My files (default: the root) |
 | `download <remote-path> <local-folder> [--no-progress]` | Download a file or a folder |
 | `upload <local-path> [remote-folder] [--no-progress]` | Upload a file or a folder |
+| `delete <remote-path>... [-r] [--permanent] [-y]` | Move files or folders to the Proton Drive trash, or delete them permanently |
 | `sync add <local-folder> <remote-folder>` | Keep a local folder and a remote folder in sync |
 | `sync remove <local-folder\|id>` | Stop syncing a folder; no files are changed |
 | `sync list`, `sync status` | Show synced folders, their last sync and whether a sync is running |
@@ -218,6 +220,21 @@ Remote paths are relative to My files: `Docs/2024` and `/Docs/2024` are the same
 - Symbolic links are skipped. Modification times are preserved. Up to 4 files upload in parallel, with the
   same progress display and retries as `download`.
 - Exit code 1 if there were conflicts or any file failed, 130 if cancelled with Ctrl+C.
+
+`delete` (also `rm`):
+
+- Moves each file or folder (with everything in it) to the **Proton Drive trash**, where it can be restored from
+  the web or apps. With `--permanent` it is deleted for good, which cannot be undone.
+- **Folders need `--recursive` (or `-r`)**, as with `rm -r`: without it, a folder is refused, so a mistyped path
+  cannot remove a whole folder tree.
+- Every path is checked first: if any of them does not exist, or is a folder without `--recursive`, nothing is
+  deleted. The root of My files cannot be deleted.
+- The items are listed and you are asked to confirm. `--yes` (or `-y`) skips the question; without a terminal
+  (scripts, pipes) `--yes` is required.
+- If an item is inside a synced folder, the next sync moves the local copy to that folder's local trash. If it is
+  a synced folder itself, syncing that folder stops until it is restored or the pair is removed. Both cases are
+  pointed out before you confirm.
+- Exit code 1 if any item could not be deleted or you answered no.
 
 ## Sync
 
