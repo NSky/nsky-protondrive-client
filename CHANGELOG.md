@@ -3,7 +3,7 @@
 All notable changes to protondrive-client are listed here, newest first. The format follows
 [Keep a Changelog](https://keepachangelog.com/en/1.1.0/), and versions follow [Semantic Versioning](https://semver.org/).
 
-## [0.2.7] - Unreleased
+## [0.2.7] - 2026-11-26
 
 ### Added
 
