@@ -5,8 +5,10 @@
 #   update-aur.sh <version> <dist-dir>            prepare and test the update, show it, do not push
 #   update-aur.sh <version> <dist-dir> --push     also push it to the AUR
 #
-# Steps: clone the AUR repo, set pkgver (pkgrel back to 1 for a new version), compute the checksums from the
-# archives in <dist-dir> (no download), regenerate .SRCINFO, build and run the package on x86_64, commit, push.
+# Steps: clone the AUR repo, copy in the install script kept next to this script (<package>.install), set pkgver
+# (pkgrel back to 1 for a new version, or one higher if only the install script changed), compute the checksums
+# from the archives in <dist-dir> (no download), regenerate .SRCINFO, build and run the package on x86_64, commit,
+# push.
 #
 # Environment: AUR_PACKAGE (default nsky-protondrive-client-bin), AUR_REPO (default the package's AUR git URL;
 # a local path works for testing), GIT_AUTHOR_NAME/GIT_AUTHOR_EMAIL for the commit.
@@ -28,6 +30,9 @@ esac
 
 package=${AUR_PACKAGE:-nsky-protondrive-client-bin}
 repo=${AUR_REPO:-ssh://aur@aur.archlinux.org/$package.git}
+here=$(CDPATH= cd -- "$(dirname -- "$0")" && pwd)
+install_script=$here/$package.install
+[ -f "$install_script" ] || die "missing $install_script"
 
 work=$(mktemp -d)
 git clone -q "$repo" "$work/aur"
@@ -40,9 +45,16 @@ for rid in linux-x64 linux-arm64; do
     cp "$dist/$archive" .
 done
 
+# The install script is kept in this repository; the PKGBUILD refers to it with install=.
+cp "$install_script" "$package.install"
+grep -q "^install=" PKGBUILD || die "the PKGBUILD has no install= line for $package.install"
+
 current=$(sed -n 's/^pkgver=//p' PKGBUILD)
 if [ "$current" != "$version" ]; then
     sed -i -e "s/^pkgver=.*/pkgver=$version/" -e "s/^pkgrel=.*/pkgrel=1/" PKGBUILD
+elif ! git diff --quiet -- "$package.install"; then
+    # Same release, new install script: users only get it with a new pkgrel.
+    sed -i "s/^pkgrel=.*/pkgrel=$(( $(sed -n 's/^pkgrel=//p' PKGBUILD) + 1 ))/" PKGBUILD
 fi
 pkgrel=$(sed -n 's/^pkgrel=//p' PKGBUILD)
 
@@ -57,7 +69,7 @@ if [ "$(uname -m)" = x86_64 ]; then
     "pkg/$package/usr/lib/protondrive/protondrive" version
 fi
 
-git add PKGBUILD .SRCINFO
+git add PKGBUILD .SRCINFO "$package.install"
 if git diff --cached --quiet; then
     echo "The AUR package is already at $version-$pkgrel with these archives; nothing to do."
     exit 0
@@ -65,7 +77,7 @@ fi
 
 git commit -q -m "Update to $version-$pkgrel"
 git --no-pager show --stat --format='%h %s (%an)' HEAD
-git --no-pager diff HEAD~1 -- PKGBUILD
+git --no-pager diff HEAD~1 -- PKGBUILD "$package.install"
 
 if [ "$push" = --push ]; then
     git push -q origin HEAD:master

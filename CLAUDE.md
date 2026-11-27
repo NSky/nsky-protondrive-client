@@ -87,5 +87,8 @@ Exit codes the units rely on:
 - `README.md` documents behaviour in detail. Update it along with behaviour changes.
 - Pushing tag `v<version>` runs `.github/workflows/release.yml`: it builds and tests linux-x64 and linux-arm64,
   publishes the GitHub release, and updates the AUR package via `packaging/aur/update-aur.sh`.
+- `.github/workflows/proton-cryptography.yml` builds Proton's unchanged `ProtonDriveApps/dotnet-crypto` into the
+  `Proton.Cryptography` package on the same feed. It runs weekly and publishes the next patch version when upstream
+  `main` moved, and it never changes the version this app references.
 - The workflow refuses a tag whose CHANGELOG section is missing or still says `Unreleased`. Replace it with the
   date before tagging.

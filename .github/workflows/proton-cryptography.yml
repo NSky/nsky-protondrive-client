@@ -1,0 +1,314 @@
+name: Proton.Cryptography package
+
+# Builds Proton's official .NET cryptography library (https://github.com/ProtonDriveApps/dotnet-crypto) into the
+# NuGet package Proton.Cryptography and publishes it to this repository owner's GitHub Packages feed:
+#   https://nuget.pkg.github.com/<owner>/index.json
+# Proton does not publish it on nuget.org. The sources are used exactly as Proton publishes them; this workflow
+# only builds the Rust native library for each runtime and packs it with the .NET library.
+#
+# - Weekly (Mondays), it checks whether upstream `main` has commits the latest published package was not built
+#   from, and if so builds and publishes the next patch version (0.40.1 -> 0.40.2). Upstream has no tags or version
+#   numbers.
+# - Run it by hand from the Actions tab to build any upstream ref, with an explicit version if wanted, and with or
+#   without publishing.
+#
+# Each package records the upstream commit it was built from in its release notes; that is how the weekly check
+# knows what was built. Publishing needs this repository to have the Write role on the package (package settings,
+# "Manage Actions access").
+#
+# This does not change which version protondrive-client uses: that is set in src/ProtonDrive.Core/ProtonDrive.Core.csproj.
+
+on:
+  schedule:
+    - cron: "17 5 * * 1"
+  workflow_dispatch:
+    inputs:
+      upstream_ref:
+        description: "Upstream branch, tag or commit of ProtonDriveApps/dotnet-crypto"
+        required: false
+        type: string
+        default: main
+      version:
+        description: "Package version, e.g. 0.41.0 (default: the latest published version with the patch number + 1)"
+        required: false
+        type: string
+      publish:
+        description: "Push the package to GitHub Packages (otherwise only upload it as a workflow artifact)"
+        required: false
+        type: boolean
+        default: true
+
+permissions:
+  contents: read
+
+concurrency:
+  group: proton-cryptography
+  cancel-in-progress: false
+
+env:
+  UPSTREAM: ProtonDriveApps/dotnet-crypto
+  PACKAGE_ID: Proton.Cryptography
+  CARGO_TERM_COLOR: always
+  DOTNET_NOLOGO: true
+  DOTNET_CLI_TELEMETRY_OPTOUT: true
+
+jobs:
+  check:
+    name: Check upstream
+    runs-on: ubuntu-24.04
+    permissions:
+      contents: read
+      packages: read
+    outputs:
+      build: ${{ steps.check.outputs.build }}
+      sha: ${{ steps.check.outputs.sha }}
+      version: ${{ steps.check.outputs.version }}
+    steps:
+      - name: Compare upstream with the published package
+        id: check
+        env:
+          GH_TOKEN: ${{ github.token }}
+          FEED: https://nuget.pkg.github.com/${{ github.repository_owner }}/download/proton.cryptography
+          INPUT_REF: ${{ inputs.upstream_ref }}
+          INPUT_VERSION: ${{ inputs.version }}
+        run: |
+          set -euo pipefail
+          sha=$(gh api "repos/${UPSTREAM}/commits/${INPUT_REF:-main}" --jq .sha)
+          echo "Upstream ${INPUT_REF:-main}: ${sha}"
+
+          # Published versions; a missing package (404) means none yet, anything else is an error.
+          status=$(curl -sS -o versions.json -w '%{http_code}' -u "x:${GH_TOKEN}" "${FEED}/index.json")
+          case "${status}" in
+            200) versions=$(jq -r '.versions[]' versions.json | sort -V) ;;
+            404) versions="" ;;
+            *) echo "::error::Reading the published versions failed (HTTP ${status}). Does this repository have access to the ${PACKAGE_ID} package?"; exit 1 ;;
+          esac
+          latest=$(printf '%s\n' "${versions}" | tail -n 1)
+          echo "Latest published version: ${latest:-none}"
+
+          # The upstream commit the latest version was built from: recorded in its release notes, or for packages
+          # built by the older fork-based workflow, the fork commit in <repository commit="...">.
+          built_from=""
+          if [ -n "${latest}" ]; then
+            curl -fsSL -o latest.nupkg -u "x:${GH_TOKEN}" "${FEED}/${latest}/proton.cryptography.${latest}.nupkg"
+            nuspec=$(unzip -p latest.nupkg '*.nuspec')
+            built_from=$(grep -oE "github\.com/${UPSTREAM}/commit/[0-9a-f]{40}" <<< "${nuspec}" | head -n 1 | grep -oE '[0-9a-f]{40}$' || true)
+            if [ -z "${built_from}" ]; then
+              built_from=$(grep -oE 'commit="[0-9a-f]{40}"' <<< "${nuspec}" | head -n 1 | grep -oE '[0-9a-f]{40}' || true)
+            fi
+          fi
+          echo "Latest version built from: ${built_from:-unknown}"
+
+          # Up to date when the built commit is the upstream commit or contains it (the fork was one commit ahead).
+          up_to_date=false
+          if [ -n "${built_from}" ]; then
+            relation=$(gh api "repos/${UPSTREAM}/compare/${sha}...${built_from}" --jq .status 2>/dev/null || echo unknown)
+            echo "Built commit compared with upstream: ${relation}"
+            case "${relation}" in identical|ahead) up_to_date=true ;; esac
+          fi
+
+          build=true
+          if [ "${GITHUB_EVENT_NAME}" = "schedule" ] && [ "${up_to_date}" = true ]; then
+            build=false
+          fi
+
+          if [ -n "${INPUT_VERSION}" ]; then
+            version="${INPUT_VERSION}"
+          elif [ -n "${latest}" ]; then
+            IFS=. read -r major minor patch <<< "${latest%%-*}"
+            version="${major}.${minor}.$((patch + 1))"
+          else
+            version="0.1.0"
+          fi
+          if ! [[ "${version}" =~ ^[0-9]+\.[0-9]+\.[0-9]+(-[0-9A-Za-z.-]+)?$ ]]; then
+            echo "::error::'${version}' is not a valid package version (expected MAJOR.MINOR.PATCH[-suffix])"
+            exit 1
+          fi
+          if [ "${build}" = true ] && grep -qxF "${version}" <<< "${versions}"; then
+            echo "::error::${PACKAGE_ID} ${version} is already published; choose another version."
+            exit 1
+          fi
+
+          {
+            echo "build=${build}"
+            echo "sha=${sha}"
+            echo "version=${version}"
+          } >> "${GITHUB_OUTPUT}"
+
+          {
+            echo "### ${PACKAGE_ID}"
+            echo "- Upstream \`${INPUT_REF:-main}\`: [\`${sha:0:12}\`](https://github.com/${UPSTREAM}/commit/${sha})"
+            echo "- Latest published: ${latest:-none}, built from \`${built_from:-unknown}\`"
+            if [ "${build}" = true ]; then
+              echo "- Building **${version}**"
+            else
+              echo "- Up to date: nothing to build"
+            fi
+          } >> "${GITHUB_STEP_SUMMARY}"
+
+  native:
+    name: Native library (${{ matrix.rid }})
+    needs: check
+    if: needs.check.outputs.build == 'true'
+    runs-on: ${{ matrix.os }}
+    strategy:
+      fail-fast: false
+      matrix:
+        include:
+          - rid: linux-x64
+            os: ubuntu-24.04
+            target: x86_64-unknown-linux-gnu
+            built: libproton_crypto.so
+            packaged: libproton_crypto.so
+          - rid: linux-arm64
+            os: ubuntu-24.04-arm
+            target: aarch64-unknown-linux-gnu
+            built: libproton_crypto.so
+            packaged: libproton_crypto.so
+          - rid: win-x64
+            os: windows-2025
+            target: x86_64-pc-windows-msvc
+            built: proton_crypto.dll
+            packaged: proton_crypto.dll
+          - rid: osx-arm64
+            os: macos-15
+            target: aarch64-apple-darwin
+            built: libproton_crypto.dylib
+            packaged: proton_crypto.dylib
+          - rid: osx-x64
+            os: macos-15
+            target: x86_64-apple-darwin
+            built: libproton_crypto.dylib
+            packaged: proton_crypto.dylib
+    defaults:
+      run:
+        shell: bash
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          repository: ${{ env.UPSTREAM }}
+          ref: ${{ needs.check.outputs.sha }}
+          persist-credentials: false
+
+      - name: Install Rust toolchain
+        run: |
+          rustup toolchain install stable --profile minimal
+          rustup default stable
+          rustup target add ${{ matrix.target }}
+
+      - name: Cache Cargo registry and build output
+        uses: actions/cache@v4
+        with:
+          path: |
+            ~/.cargo/registry/index
+            ~/.cargo/registry/cache
+            src/rust/proton-crypto-ffi/target
+          key: cargo-${{ matrix.target }}-${{ hashFiles('src/rust/proton-crypto-ffi/Cargo.toml') }}
+          restore-keys: cargo-${{ matrix.target }}-
+
+      - name: Build
+        working-directory: src/rust/proton-crypto-ffi
+        env:
+          # Used by build.rs as the BUILD component of the Windows DLL file version.
+          CI_PIPELINE_IID: ${{ github.run_number }}
+        run: cargo build --release --target ${{ matrix.target }}
+
+      - name: Stage library
+        run: |
+          mkdir -p bin/runtimes/${{ matrix.rid }}/native
+          cp src/rust/proton-crypto-ffi/target/${{ matrix.target }}/release/${{ matrix.built }} \
+             bin/runtimes/${{ matrix.rid }}/native/${{ matrix.packaged }}
+          ls -la bin/runtimes/${{ matrix.rid }}/native
+
+      - uses: actions/upload-artifact@v4
+        with:
+          name: native-${{ matrix.rid }}
+          path: bin/runtimes/${{ matrix.rid }}/
+          if-no-files-found: error
+          retention-days: 7
+
+  pack:
+    name: Test, pack and publish
+    needs: [check, native]
+    runs-on: ubuntu-24.04
+    permissions:
+      contents: read
+      packages: write
+    env:
+      VERSION: ${{ needs.check.outputs.version }}
+      UPSTREAM_SHA: ${{ needs.check.outputs.sha }}
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          repository: ${{ env.UPSTREAM }}
+          ref: ${{ needs.check.outputs.sha }}
+          persist-credentials: false
+
+      - uses: actions/setup-dotnet@v4
+        with:
+          dotnet-version: 10.0.x
+
+      - name: Download native libraries
+        uses: actions/download-artifact@v4
+        with:
+          pattern: native-*
+          path: artifacts
+
+      - name: Assemble runtimes folder
+        run: |
+          for dir in artifacts/native-*; do
+            rid="${dir#artifacts/native-}"
+            mkdir -p "bin/runtimes/${rid}"
+            cp -R "${dir}/." "bin/runtimes/${rid}/"
+          done
+          find bin/runtimes -type f | sort
+
+      # The upstream sources trigger nullability warnings (CS8620) with current .NET 10 SDKs, which the
+      # project turns into errors in Release builds. They do not affect behavior.
+      - name: Run tests (linux-x64)
+        run: dotnet run --project tests/dotnet/Proton.Cryptography.Tests.csproj -c Release -p:TreatWarningsAsErrors=false
+
+      # The release notes name the exact upstream commit: the weekly check reads them back.
+      - name: Pack
+        run: |
+          dotnet pack src/dotnet/Proton.Cryptography.csproj -c Release \
+            -p:Version="${VERSION}" \
+            -p:TreatWarningsAsErrors=false \
+            -p:RepositoryUrl="${GITHUB_SERVER_URL}/${GITHUB_REPOSITORY}" \
+            -p:RepositoryType=git \
+            -p:RepositoryCommit="${GITHUB_SHA}" \
+            -p:PackageReleaseNotes="Built unchanged from https://github.com/${UPSTREAM}/commit/${UPSTREAM_SHA} by ${GITHUB_SERVER_URL}/${GITHUB_REPOSITORY}/actions/runs/${GITHUB_RUN_ID}" \
+            --output out
+
+      - name: Verify package contents
+        run: |
+          package="out/${PACKAGE_ID}.${VERSION}.nupkg"
+          unzip -l "${package}"
+          for lib in \
+            runtimes/linux-x64/native/libproton_crypto.so \
+            runtimes/linux-arm64/native/libproton_crypto.so \
+            runtimes/win-x64/native/proton_crypto.dll \
+            runtimes/osx-arm64/native/proton_crypto.dylib \
+            runtimes/osx-x64/native/proton_crypto.dylib \
+            lib/net10.0/Proton.Cryptography.dll; do
+            unzip -l "${package}" "${lib}" > /dev/null || { echo "::error::${lib} is missing from the package"; exit 1; }
+          done
+          unzip -p "${package}" '*.nuspec' | grep -qF "${UPSTREAM}/commit/${UPSTREAM_SHA}" \
+            || { echo "::error::The package does not record the upstream commit"; exit 1; }
+
+      - uses: actions/upload-artifact@v4
+        with:
+          name: nuget-package
+          path: out/*.nupkg
+          if-no-files-found: error
+
+      - name: Publish to GitHub Packages
+        if: github.event_name == 'schedule' || inputs.publish
+        env:
+          NUGET_API_KEY: ${{ secrets.GITHUB_TOKEN }}
+        run: |
+          dotnet nuget push "out/${PACKAGE_ID}.${VERSION}.nupkg" \
+            --source "https://nuget.pkg.github.com/${GITHUB_REPOSITORY_OWNER}/index.json" \
+            --api-key "${NUGET_API_KEY}" \
+            --no-symbols
+          echo "- Published **${PACKAGE_ID} ${VERSION}**" >> "${GITHUB_STEP_SUMMARY}"

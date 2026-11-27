@@ -115,12 +115,22 @@ new version was installed. Services started by a version older than 0.2.7 do not
 ### Proton packages
 
 The Proton packages are not published on nuget.org. They come from the GitHub Packages feed
-`https://nuget.pkg.github.com/NSky/index.json`, where GitHub Actions workflows in two forks publish them:
+`https://nuget.pkg.github.com/NSky/index.json`, where GitHub Actions workflows publish them:
 
-| Package | Built from |
-| --- | --- |
-| `Proton.Sdk`, `Proton.Drive.Sdk`, `Proton.Drive.Sdk.Account` | [NSky/proton-drive-sdk](https://github.com/NSky/proton-drive-sdk) |
-| `Proton.Cryptography` (linux-x64, linux-arm64, win-x64, osx-arm64, osx-x64) | [NSky/proton-dotnet-crypto](https://github.com/NSky/proton-dotnet-crypto) |
+| Package | Built from | By |
+| --- | --- | --- |
+| `Proton.Sdk`, `Proton.Drive.Sdk`, `Proton.Drive.Sdk.Account` | [NSky/proton-drive-sdk](https://github.com/NSky/proton-drive-sdk) (a fork) | that fork's workflow |
+| `Proton.Cryptography` (linux-x64, linux-arm64, win-x64, osx-arm64, osx-x64) | [ProtonDriveApps/dotnet-crypto](https://github.com/ProtonDriveApps/dotnet-crypto), unchanged | `.github/workflows/proton-cryptography.yml` in this repository (up to 0.40.1: the fork [NSky/proton-dotnet-crypto](https://github.com/NSky/proton-dotnet-crypto)) |
+
+**`Proton.Cryptography`** is built here straight from Proton's repository. Every Monday the workflow checks whether
+Proton's `main` branch has commits that the latest published package was not built from. If it has, it builds the
+native library for each runtime, runs Proton's tests, and publishes the next patch version (0.40.1, then 0.40.2, …).
+Proton's repository has no version numbers of its own, so these are this feed's. Each package's release notes name
+the exact upstream commit, which is how the next check knows what was built. It can also be run by hand from the
+Actions tab, for any upstream branch, tag or commit, with a chosen version, and with or without publishing. A new
+package version is not used until the version in `ProtonDrive.Core.csproj` is raised. Publishing needs this
+repository to have the **Write** role on the package (package settings, **Manage Actions access**). GitHub turns
+off scheduled workflows in a repository with no activity for 60 days; re-enable it on the Actions tab if that happens.
 
 Their versions are set in `src/ProtonDrive.Core/ProtonDrive.Core.csproj`, like any other package version (`Proton.Sdk`
 comes with `Proton.Drive.Sdk`). Keep `Proton.Drive.Sdk` and `Proton.Drive.Sdk.Account` at the same version.
@@ -169,6 +179,9 @@ After publishing the release, the workflow updates the AUR package
 [`nsky-protondrive-client-bin`](https://aur.archlinux.org/packages/nsky-protondrive-client-bin) with
 `packaging/aur/update-aur.sh`. In an Arch Linux container, the script sets the new `pkgver`, computes the
 checksums from the archives it just built, regenerates `.SRCINFO`, test-builds and runs the package, and pushes.
+The package's install script (the messages pacman shows after installing and before removing) is kept here as
+`packaging/aur/nsky-protondrive-client-bin.install` and copied into the AUR package each time. If only that file
+changed for a version already on the AUR, the script raises `pkgrel` so users get it.
 This needs:
 
 - the repository secret `AUR_SSH_PRIVATE_KEY`: the private half of an SSH key whose public half is added to the
