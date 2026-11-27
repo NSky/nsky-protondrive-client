@@ -4,7 +4,8 @@ name: Proton.Cryptography package
 # NuGet package Proton.Cryptography and publishes it to this repository owner's GitHub Packages feed:
 #   https://nuget.pkg.github.com/<owner>/index.json
 # Proton does not publish it on nuget.org. The sources are used exactly as Proton publishes them; this workflow
-# only builds the Rust native library for each runtime and packs it with the .NET library.
+# only builds the Rust native library for linux-x64 and linux-arm64 (the platforms protondrive-client supports) and
+# packs it with the .NET library. The package does not work on Windows or macOS.
 #
 # - Weekly (Mondays), it checks whether upstream `main` has commits the latest published package was not built
 #   from, and if so builds and publishes the next patch version (0.40.1 -> 0.40.2). Upstream has no tags or version
@@ -165,21 +166,6 @@ jobs:
             target: aarch64-unknown-linux-gnu
             built: libproton_crypto.so
             packaged: libproton_crypto.so
-          - rid: win-x64
-            os: windows-2025
-            target: x86_64-pc-windows-msvc
-            built: proton_crypto.dll
-            packaged: proton_crypto.dll
-          - rid: osx-arm64
-            os: macos-15
-            target: aarch64-apple-darwin
-            built: libproton_crypto.dylib
-            packaged: proton_crypto.dylib
-          - rid: osx-x64
-            os: macos-15
-            target: x86_64-apple-darwin
-            built: libproton_crypto.dylib
-            packaged: proton_crypto.dylib
     defaults:
       run:
         shell: bash
@@ -287,9 +273,6 @@ jobs:
           for lib in \
             runtimes/linux-x64/native/libproton_crypto.so \
             runtimes/linux-arm64/native/libproton_crypto.so \
-            runtimes/win-x64/native/proton_crypto.dll \
-            runtimes/osx-arm64/native/proton_crypto.dylib \
-            runtimes/osx-x64/native/proton_crypto.dylib \
             lib/net10.0/Proton.Cryptography.dll; do
             unzip -l "${package}" "${lib}" > /dev/null || { echo "::error::${lib} is missing from the package"; exit 1; }
           done

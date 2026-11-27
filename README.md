@@ -120,7 +120,7 @@ The Proton packages are not published on nuget.org. They come from the GitHub Pa
 | Package | Built from | By |
 | --- | --- | --- |
 | `Proton.Sdk`, `Proton.Drive.Sdk`, `Proton.Drive.Sdk.Account` | [NSky/proton-drive-sdk](https://github.com/NSky/proton-drive-sdk) (a fork) | that fork's workflow |
-| `Proton.Cryptography` (linux-x64, linux-arm64, win-x64, osx-arm64, osx-x64) | [ProtonDriveApps/dotnet-crypto](https://github.com/ProtonDriveApps/dotnet-crypto), unchanged | `.github/workflows/proton-cryptography.yml` in this repository (up to 0.40.1: the fork [NSky/proton-dotnet-crypto](https://github.com/NSky/proton-dotnet-crypto)) |
+| `Proton.Cryptography` (linux-x64, linux-arm64; up to 0.40.1 also win-x64, osx-arm64, osx-x64) | [ProtonDriveApps/dotnet-crypto](https://github.com/ProtonDriveApps/dotnet-crypto), unchanged | `.github/workflows/proton-cryptography.yml` in this repository (up to 0.40.1: the fork [NSky/proton-dotnet-crypto](https://github.com/NSky/proton-dotnet-crypto)) |
 
 **`Proton.Cryptography`** is built here straight from Proton's repository. Every Monday the workflow checks whether
 Proton's `main` branch has commits that the latest published package was not built from. If it has, it builds the
