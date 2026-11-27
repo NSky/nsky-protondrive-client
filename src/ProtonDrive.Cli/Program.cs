@@ -277,7 +277,7 @@ static void PrintHelp()
     var name = AppInfo.CommandName;
     var notice = string.Join(Environment.NewLine, AppInfo.Disclaimer.Split('\n').Select(line => "  " + line.TrimEnd('\r')));
     Console.WriteLine($"""
-        {H($"{name} {AppInfo.Version}")} (beta): an unofficial command-line client for Proton Drive
+        {H($"{name} {AppInfo.Version}")}: an unofficial command-line client for Proton Drive
 
         {H("Usage:")} {name} <command> [arguments] [options]
         Remote paths are in My files and start with /, for example /Documents/report.pdf.

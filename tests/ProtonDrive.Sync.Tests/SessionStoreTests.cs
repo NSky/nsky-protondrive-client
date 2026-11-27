@@ -112,6 +112,7 @@ public sealed class SessionStoreTests : IDisposable
     }
 
     [Fact]
+    [System.Runtime.Versioning.UnsupportedOSPlatform("windows")]
     public void A_leftover_temporary_file_does_not_keep_its_permissions()
     {
         var store = NewStore();

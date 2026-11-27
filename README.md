@@ -5,7 +5,7 @@ Unofficial command-line client for Proton Drive, written in C# on top of the
 folders.
 
 > [!WARNING]
-> **Beta version.** This is unofficial, third-party software. It is not affiliated with, endorsed by or
+> This is unofficial, third-party software. It is not affiliated with, endorsed by or
 > supported by Proton AG; "Proton" and "Proton Drive" are trademarks of Proton AG. It is provided "as is",
 > without warranty of any kind, and the authors accept no responsibility or liability for any loss of data,
 > damage to your account or other harm resulting from its use. The sync feature changes and deletes files on
@@ -161,7 +161,7 @@ packages, each of the four packages must grant this repository read access (pack
 access**).
 
 The release notes are the version's section of `CHANGELOG.md`, followed by a link to the full list of changes since
-the previous version and the beta notice; `packaging/release-notes.sh <version>` prints them. Before tagging, change
+the previous version and the notice that it is unofficial and provided as is; `packaging/release-notes.sh <version>` prints them. Before tagging, change
 the version's heading from `Unreleased` to the release date (`## [0.2.7] - 2026-11-27`): the workflow refuses a tag
 whose section is missing or still marked `Unreleased`, before building anything.
 
@@ -452,13 +452,10 @@ refreshing again.
 
 ## Application identification
 
-Requests carry `x-pm-appversion: external-drive-nsky_protondrive@<version>-beta`, as required by
+Requests carry `x-pm-appversion: external-drive-nsky_protondrive@<version>-stable`, as required by
 Proton's [third-party usage guidelines](https://github.com/ProtonDriveApps/sdk#usage-guidelines-for-personal-projects).
 
 ## Disclaimer
-
-This software is a **beta version** under active development. Expect bugs, and expect behaviour and stored
-data formats to change between versions.
 
 - It is an **unofficial, third-party client**. It is not affiliated with, endorsed by, sponsored by or supported
   by Proton AG. "Proton" and "Proton Drive" are trademarks of Proton AG and are used here only to describe what

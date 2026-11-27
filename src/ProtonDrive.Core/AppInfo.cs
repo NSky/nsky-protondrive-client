@@ -8,7 +8,7 @@ internal static class AppInfo
 
     /// <summary>Shown in the help text (<c>protondrive help</c>) only.</summary>
     public const string Disclaimer = """
-        BETA VERSION. This is unofficial, third-party software. It is not affiliated with, endorsed by or
+        This is unofficial, third-party software. It is not affiliated with, endorsed by or
         supported by Proton AG. It is provided "as is", without warranty of any kind, and the authors accept no
         responsibility or liability for any loss of data, damage to your account or other harm resulting from its
         use. Keep independent backups of anything important.
@@ -21,7 +21,7 @@ internal static class AppInfo
     /// Value of the <c>x-pm-appversion</c> header. Proton requires third-party clients to identify themselves
     /// honestly using the shape <c>external-drive-{name}@{semver}-{channel}</c>.
     /// </summary>
-    public static string ProtonAppVersion { get; } = $"external-drive-nsky_protondrive@{Version}-beta";
+    public static string ProtonAppVersion { get; } = $"external-drive-nsky_protondrive@{Version}-stable";
 
     public static string UserAgent { get; } = $"{CommandName}/{Version} ({Environment.OSVersion.Platform})";
 

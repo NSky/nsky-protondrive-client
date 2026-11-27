@@ -46,4 +46,4 @@ if [ -n "$previous" ]; then
     printf '**Full list of changes:** https://github.com/%s/compare/v%s...v%s\n\n' "$repository" "$previous" "$version"
 fi
 printf '%s\n' "---" "" \
-    "Beta release, provided as is, without warranty. Unofficial; not affiliated with Proton AG. See the README's Install section and Disclaimer."
+    "Provided as is, without warranty. Unofficial; not affiliated with Proton AG. See the README's Install section and Disclaimer."

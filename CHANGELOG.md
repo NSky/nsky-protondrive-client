@@ -3,7 +3,13 @@
 All notable changes to protondrive-client are listed here, newest first. The format follows
 [Keep a Changelog](https://keepachangelog.com/en/1.1.0/), and versions follow [Semantic Versioning](https://semver.org/).
 
-## [0.2.8] - Unreleased
+## [0.2.8] - 2026-11-27
+
+### Changed
+
+- **Stable release.** protondrive is no longer marked as a beta: the help text, README and release notes drop
+  the word, and requests now identify the app as `…@<version>-stable` to Proton. The notice that it is unofficial,
+  not affiliated with Proton AG and provided "as is", without warranty, stays.
 
 ### Added
 
