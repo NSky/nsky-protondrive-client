@@ -123,6 +123,9 @@ install_files() {
         echo "  protondrive login"
         echo "  protondrive sync add <local-folder> <remote-folder>"
         echo "  protondrive service enable      # keep syncing in the background, also after logging out"
+        echo
+        echo "Background sync services that are already running restart on this version by themselves, once no"
+        echo "sync is in progress."
     fi
 }
 

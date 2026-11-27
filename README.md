@@ -99,6 +99,13 @@ the service starts at boot and keeps running after the user logs out. If the sys
 
 `protondrive service disable` stops it. Logs: `journalctl --user -u protondrive-sync-watch`.
 
+**Updating.** Install the new version the same way (`sudo ./install.sh`, `sudo make install` or the package
+manager); there is nothing to do per user. A running watch service notices the new program within a minute and
+restarts on it, but only once no sync pass is running, so an upload or download in progress is never cut off. The
+timer mode starts the new version at its next pass anyway. A `sync --watch` started in a terminal only prints that a
+new version was installed. Services started by a version older than 0.2.7 do not do this yet: restart them once with
+`protondrive service enable`.
+
 ## Building from source
 
 ### Prerequisites
@@ -397,6 +404,8 @@ seconds after changes settle, the events feed is polled every 30 seconds, and a 
 Two passes on the same folder never overlap (a lock per folder), so a sync started by hand or from cron while the
 service runs is safe. If the Proton session ends, the watch service exits with code 3 and stays stopped; run
 `protondrive login`, then `protondrive service enable` again.
+When a new version is installed, the watch service restarts on it once no pass is running (if the restart cannot be
+requested, it exits with code 75 and systemd starts it again).
 
 **Not synced:** symbolic links, special files, names that are not valid on this system, Proton Docs and Sheets
 (they have no file content), and editor lock and swap files (`.~lock.*#`, `~$*`, `.*.swp`), `.DS_Store`,

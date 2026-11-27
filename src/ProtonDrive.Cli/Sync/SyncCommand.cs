@@ -1,6 +1,7 @@
 using System.Globalization;
 using System.Security.Cryptography;
 using NSkyLabs.ProtonDrive.Cli.Notifications;
+using NSkyLabs.ProtonDrive.Cli.Service;
 using NSkyLabs.ProtonDrive.Sync;
 using NSkyLabs.ProtonDrive.Sync.State;
 using Proton.Drive.Sdk.Nodes;
@@ -20,6 +21,12 @@ internal static class SyncCommand
 
     /// <summary>Exit code of <c>sync --watch</c> when the session has ended (see contrib/systemd).</summary>
     private const int SessionEndedExitCode = 3;
+
+    /// <summary>
+    /// Exit code of <c>sync --watch</c> under systemd when a new version was installed but the restart could not be
+    /// requested: non-zero, so <c>Restart=on-failure</c> starts the new version.
+    /// </summary>
+    private const int UpdatedExitCode = 75;
 
     public const string Usage = """
         Usage:
@@ -383,7 +390,29 @@ internal static class SyncCommand
             Console.Error.WriteLine($"  {ConsoleSyncObserver.Describe(pair)}");
         }
 
-        var service = new SyncWatchService(engine, pairs, new SyncWatchOptions(), observer);
+        // A new version installed while watching: under systemd, restart on it once no pass is running; in a
+        // terminal, say so once and keep going.
+        var updates = UpdateWatcher.Create();
+        var underSystemd = Environment.GetEnvironmentVariable("INVOCATION_ID") is { Length: > 0 };
+        var updateNoted = false;
+        bool StopForUpdate()
+        {
+            if (updates is null || updateNoted || !updates.IsUpdateReady())
+            {
+                return false;
+            }
+
+            if (underSystemd)
+            {
+                return true;
+            }
+
+            updateNoted = true;
+            Console.Error.WriteLine($"A new version was installed ({updates.NewVersion}). Restart '{AppInfo.CommandName} sync --watch' to use it.");
+            return false;
+        }
+
+        var service = new SyncWatchService(engine, pairs, new SyncWatchOptions { StopWhenIdle = StopForUpdate }, observer);
         try
         {
             await service.RunAsync(IsFatal, cancellationToken).ConfigureAwait(false);
@@ -398,6 +427,28 @@ internal static class SyncCommand
             // A distinct exit code lets the systemd unit stop restarting until the user logs in again.
             Console.Error.WriteLine($"The session has ended ({ex.Message}). Run '{AppInfo.CommandName} login', then restart the sync.");
             return SessionEndedExitCode;
+        }
+
+        if (updates?.NewVersion is { } newVersion && underSystemd && !cancellationToken.IsCancellationRequested)
+        {
+            Console.Error.WriteLine($"A new version was installed ({newVersion}); restarting on it now that no sync is running.");
+            SystemdStatus.Set($"Restarting on the new version ({newVersion})");
+            if (!UpdateWatcher.RequestServiceRestart())
+            {
+                return UpdatedExitCode;
+            }
+
+            // systemd stops this process as part of the restart; wait for it rather than racing it.
+            try
+            {
+                await Task.Delay(TimeSpan.FromSeconds(30), cancellationToken).ConfigureAwait(false);
+            }
+            catch (OperationCanceledException)
+            {
+                return 0;
+            }
+
+            return UpdatedExitCode;
         }
 
         Console.Error.WriteLine("Stopped.");
