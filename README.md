@@ -197,6 +197,7 @@ All namespaces start with `NSkyLabs.ProtonDrive`.
 | `login [-u <name>]` | Sign in; password, 2FA code and mailbox password are prompted |
 | `whoami` | Show the signed-in account and check that the keys unlock |
 | `logout` | End the session on the server and delete the local session |
+| `session status`, `session encrypt`, `session decrypt` | Show how the saved login is stored; encrypt it with systemd-creds, or store it as a plain file again |
 | `ls [path]` | List one level of a folder in My files (default: the root) |
 | `download <remote-path> <local-folder> [--no-progress]` | Download a file or a folder |
 | `upload <local-path> [remote-folder] [--no-progress]` | Upload a file or a folder |
@@ -422,12 +423,27 @@ requested, it exits with code 75 and systemd starts it again).
 
 | What | Where |
 | --- | --- |
-| Session: tokens and the key passphrases derived from your password (`0600`) | `~/.config/protondrive/session.json` |
+| Session: tokens and the key passphrases derived from your password (`0600`) | `~/.config/protondrive/session.json`, or `session.cred` when encrypted |
 | Synced folder pairs | `~/.config/protondrive/sync.json` |
 | Sync state databases and locks | `~/.local/state/protondrive/sync/` (`$XDG_STATE_HOME`) |
 | Downloads in progress, local trash | `<synced folder>/.protondrive/` |
 
-Your password itself is never stored. Moving the secrets to the OS secret store is planned.
+Your password itself is never stored. The session file, however, is as good as a login: its tokens give access
+to the account, and the key passphrases decrypt your files. Keep `~/.config/protondrive` out of backups and dotfile
+repositories, and if the file is ever copied or shared, run `protondrive logout` (which ends the session on the
+server) and log in again.
+
+**Encrypting the session.** `protondrive session encrypt` encrypts it with `systemd-creds` (systemd 256 or newer),
+using a key held by the system, and by the TPM when the computer has one, and bound to your user. A copy of
+`session.cred` cannot be decrypted on another computer or by another user. Background sync keeps working, also
+after logging out and after a reboot, because no desktop keyring is involved. Decrypting takes about 1.5 seconds,
+so with encryption on every command starts that much later (the watch service only at startup). Logging out and in
+again keeps it encrypted. `protondrive session decrypt` turns it off, and `protondrive session status` shows which
+it is.
+
+This protects copies of the file, not your running account: programs running as you can still ask systemd to
+decrypt it, as they could read the plain file. If the key changes (a new TPM or motherboard, a reinstalled system),
+the session cannot be decrypted any more: `protondrive logout` still removes it, then log in again.
 
 Several processes can use the session at once, for example the sync service and a command run by hand. Proton
 refresh tokens can only be used once, so token refreshes are coordinated through a lock file

@@ -1,6 +1,7 @@
 using System.Runtime.InteropServices;
 using NSkyLabs.ProtonDrive.Cli.Drive;
 using NSkyLabs.ProtonDrive.Cli.Service;
+using NSkyLabs.ProtonDrive.Cli.Session;
 using NSkyLabs.ProtonDrive.Cli.Sync;
 using NSkyLabs.ProtonDrive.Cli.Terminal;
 using NSkyLabs.ProtonDrive.Sync;
@@ -78,6 +79,7 @@ try
             Console.WriteLine($"Password mode: {context.Session.PasswordMode}");
             Console.WriteLine($"Account keys:  {keyState}");
             Console.WriteLine($"Logged in at:  {context.Stored.CreatedAt.ToLocalTime():u}");
+            Console.WriteLine($"Saved login:   {SessionCommand.Describe(sessionStore)}");
             return 0;
         }
 
@@ -175,6 +177,9 @@ try
 
         case "service":
             return ServiceCommand.Run(args[1..], sessionStore);
+
+        case "session":
+            return SessionCommand.Run(commandArgs[1..], sessionStore);
 
         case "version":
         case "--version":
@@ -282,6 +287,9 @@ static void PrintHelp()
               -u, --username <name>     the account to sign in with
           whoami                      Show the signed-in account and check the session (also: status)
           logout                      Sign out and remove the saved credentials
+          session status              Show where the saved login is kept and whether it is encrypted
+          session encrypt             Encrypt the saved login with systemd-creds, tied to this computer
+          session decrypt             Keep the saved login as a plain file readable only by you
 
         {H("Files on Proton Drive")}
           ls [path]                   List a folder, one level (default: the root; also: list)

@@ -3,6 +3,21 @@
 All notable changes to protondrive-client are listed here, newest first. The format follows
 [Keep a Changelog](https://keepachangelog.com/en/1.1.0/), and versions follow [Semantic Versioning](https://semver.org/).
 
+## [0.2.8] - Unreleased
+
+### Added
+
+- **The saved login can be encrypted.** `protondrive session encrypt` stores the session (tokens and key
+  passphrases) encrypted with `systemd-creds`, tied to this computer and user, so a copied file is useless
+  elsewhere. Background sync keeps working after logout and reboot. It is off by default because each command then
+  starts about 1.5 seconds later; `session decrypt` turns it off again and `session status` shows which is on.
+  `whoami` shows it too.
+
+### Fixed
+
+- **The session file is always written readable only by you.** A temporary file left over from an interrupted
+  save could keep wider permissions and pass them on to the session file.
+
 ## [0.2.7] - 2026-11-26
 
 ### Added

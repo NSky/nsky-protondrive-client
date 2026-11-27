@@ -143,9 +143,18 @@ internal sealed class AuthService(SessionStore store)
     /// </summary>
     public async Task<(bool WasLoggedIn, string? Warning)> LogoutAsync(CancellationToken cancellationToken)
     {
-        if (store.Load() is null)
+        try
         {
-            return (false, null);
+            if (store.Load() is null)
+            {
+                return (false, null);
+            }
+        }
+        catch (SessionProtectionException ex)
+        {
+            // Logging out must still work when the encrypted session cannot be read (e.g. a replaced TPM).
+            store.Delete();
+            return (true, $"{ex.Message} Removed the local session without ending it on the server.");
         }
 
         string? warning = null;
