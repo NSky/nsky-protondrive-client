@@ -13,6 +13,12 @@ internal sealed record SyncWatchOptions
 
     /// <summary>Wait after a failed pass before trying that pair again.</summary>
     public TimeSpan RetryDelay { get; init; } = TimeSpan.FromMinutes(1);
+
+    /// <summary>
+    /// Checked while no pass is running; returning true stops the watch (e.g. a new version was installed and the
+    /// service should restart on it). A pass in progress is never interrupted for it.
+    /// </summary>
+    public Func<bool>? StopWhenIdle { get; init; }
 }
 
 /// <summary>
@@ -23,7 +29,7 @@ internal sealed class SyncWatchService(SyncEngine engine, IReadOnlyList<SyncPair
 {
     private static readonly TimeSpan Tick = TimeSpan.FromSeconds(1);
 
-    /// <summary>Runs until cancelled. Throws only for errors that retrying cannot fix (e.g. the session ended).</summary>
+    /// <summary>Runs until cancelled or <see cref="SyncWatchOptions.StopWhenIdle"/> says so. Throws only for errors that retrying cannot fix (e.g. the session ended).</summary>
     public async Task RunAsync(Func<Exception, bool> isFatal, CancellationToken cancellationToken)
     {
         var states = pairs.Select(p => new PairState(p)).ToList();
@@ -37,6 +43,11 @@ internal sealed class SyncWatchService(SyncEngine engine, IReadOnlyList<SyncPair
 
             while (!cancellationToken.IsCancellationRequested)
             {
+                if (options.StopWhenIdle?.Invoke() == true)
+                {
+                    return;
+                }
+
                 var now = DateTime.UtcNow;
 
                 foreach (var state in states)

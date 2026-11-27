@@ -13,6 +13,10 @@ All notable changes to protondrive-client are listed here, newest first. The for
 
 ### Changed
 
+- **The background sync restarts on a new version by itself.** After an install or upgrade, the watch service
+  notices within a minute that its program was replaced, waits until no sync pass is running, checks that the new
+  version starts, and has systemd restart it on that version. Nothing is interrupted, and there is nothing to do per
+  user. (Services started by an older version need one `protondrive service enable` to pick this up.)
 - **Easier-to-read help.** `protondrive help` groups the commands (account, files, sync, background sync), lists
   each command's options under it, shows aliases as "also: …", and puts the notice at the end.
 - **Release notes on GitHub list the changes.** Each release now shows its section of this changelog, with a link to
