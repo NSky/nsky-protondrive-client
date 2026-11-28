@@ -9,7 +9,7 @@ Unofficial command-line client for Proton Drive, written in C# on top of the
 [Proton Drive SDK](https://github.com/ProtonDriveApps/sdk), with bidirectional synchronization of local
 folders.
 
-> [!WARNING]
+> [!NOTE]
 > This is unofficial, third-party software. It is not affiliated with, endorsed by or
 > supported by Proton AG; "Proton" and "Proton Drive" are trademarks of Proton AG. It is provided "as is",
 > without warranty of any kind, and the authors accept no responsibility or liability for any loss of data,
