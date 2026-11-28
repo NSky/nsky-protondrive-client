@@ -1,5 +1,10 @@
 # Security review
 
+<p align="center">
+  <img src=".github/security-review.svg" width="720"
+       alt="Security review of protondrive 0.2.10, 27 November 2026: no high- or medium-severity issues. Reviewed by the project with AI assistance, not an independent audit.">
+</p>
+
 You give protondrive your Proton password, so you should be able to check what it does with it. This document
 describes how the code handles your password, your session and your files. Each point names the code it comes from,
 so you can check it yourself.

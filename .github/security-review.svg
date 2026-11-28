@@ -1,0 +1,61 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<!--
+  Summary card for SECURITY-REVIEW.md. Same palette as social-preview.svg.
+  It states what the review was (the project's own, AI-assisted) rather than looking like a third-party certificate.
+  Update the version, commit, date and counts when the review is redone.
+  Render to check: rsvg-convert -w 1200 security-review.svg -o /tmp/security-review.png
+-->
+<svg xmlns="http://www.w3.org/2000/svg" width="1200" height="440" viewBox="0 0 1200 440"
+     role="img" aria-labelledby="title desc">
+  <title id="title">protondrive security review summary</title>
+  <desc id="desc">Whole-repository security review of protondrive 0.2.10, 27 November 2026. No high- or
+    medium-severity issues. Reviewed by the project with AI
+    assistance; not an independent audit.</desc>
+  <defs>
+    <linearGradient id="bg" x1="0" y1="0" x2="1" y2="1">
+      <stop offset="0" stop-color="#0b1220"/>
+      <stop offset="1" stop-color="#14213d"/>
+    </linearGradient>
+    <radialGradient id="glow" cx="0.14" cy="0.4" r="0.5">
+      <stop offset="0" stop-color="#2dd4bf" stop-opacity="0.18"/>
+      <stop offset="1" stop-color="#2dd4bf" stop-opacity="0"/>
+    </radialGradient>
+    <linearGradient id="shield" x1="0" y1="0" x2="0" y2="1">
+      <stop offset="0" stop-color="#2dd4bf"/>
+      <stop offset="1" stop-color="#0f766e"/>
+    </linearGradient>
+  </defs>
+
+  <rect width="1200" height="440" rx="24" fill="url(#bg)"/>
+  <rect width="1200" height="440" rx="24" fill="url(#glow)"/>
+  <rect x="1" y="1" width="1198" height="438" rx="23" fill="none" stroke="#1f2d47" stroke-width="2"/>
+
+  <!-- Shield with a check mark -->
+  <g transform="translate(70 70)">
+    <path d="M110 0 L210 36 V118 C210 186 166 238 110 262 C54 238 10 186 10 118 V36 Z" fill="url(#shield)"/>
+    <path d="M110 18 L194 48 V118 C194 176 158 220 110 242 C62 220 26 176 26 118 V48 Z" fill="none"
+          stroke="#ccfbf1" stroke-opacity="0.35" stroke-width="3"/>
+    <path d="M66 128 L98 160 L158 96" fill="none" stroke="#f0fdfa" stroke-width="18" stroke-linecap="round"
+          stroke-linejoin="round"/>
+  </g>
+
+  <g font-family="Noto Sans, DejaVu Sans, Helvetica, Arial, sans-serif">
+    <text x="340" y="96" font-size="20" font-weight="600" letter-spacing="3" fill="#2dd4bf">SECURITY REVIEW</text>
+    <text x="338" y="150" font-size="44" font-weight="700" fill="#f1f5f9">protondrive 0.2.10</text>
+    <text x="340" y="186" font-size="22" fill="#94a3b8">Whole repository &#183; 27 November 2026</text>
+
+    <!-- Results -->
+    <g transform="translate(340 236)">
+      <circle cx="12" cy="12" r="12" fill="#22c55e"/>
+      <path d="M6 12 L10.5 16.5 L18 8" fill="none" stroke="#052e16" stroke-width="3" stroke-linecap="round"
+            stroke-linejoin="round"/>
+      <text x="38" y="20" font-size="25" fill="#e2e8f0"><tspan font-weight="700" fill="#4ade80">0</tspan> high &#183; <tspan font-weight="700" fill="#4ade80">0</tspan> medium-severity issues</text>
+    </g>
+    <text x="340" y="314" font-size="19" fill="#94a3b8">Password &#183; session &#183; TLS &#183; file names and paths &#183; child processes &#183; builds</text>
+  </g>
+
+  <!-- What kind of review it was -->
+  <path d="M40 366 H1160" stroke="#1f2d47" stroke-width="2"/>
+  <text x="600" y="408" text-anchor="middle" font-family="Noto Sans, DejaVu Sans, Helvetica, Arial, sans-serif"
+        font-size="19" fill="#94a3b8">Reviewed by the project with AI assistance (Claude) &#183; not an independent audit &#183; details below</text>
+</svg>
