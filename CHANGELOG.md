@@ -3,6 +3,28 @@
 All notable changes to protondrive-client are listed here, newest first. The format follows
 [Keep a Changelog](https://keepachangelog.com/en/1.1.0/), and versions follow [Semantic Versioning](https://semver.org/).
 
+## [0.2.10] - Unreleased
+
+### Added
+
+- **A security review.** [SECURITY-REVIEW.md](SECURITY-REVIEW.md) shows, with references to the code, how your
+  password, session and files are handled. The README links to it.
+
+### Security
+
+- **File names can no longer control the terminal.** A name on Proton Drive (for example one chosen by someone you
+  share a folder with) could contain escape sequences that change the window title, move the cursor and rewrite
+  earlier lines, such as the list of held deletions. On a terminal, control characters and invisible text-direction
+  characters in names and messages are now shown as visible escapes (`\x1B`, `\u202E`). Output to pipes, files and
+  the journal is unchanged.
+- **`download` no longer writes through a link at its partial file.** The `.protondrive-part` file is now always
+  created new. Before, a symbolic link placed at that name could make a download overwrite the file it pointed to,
+  in a download folder that other users can write to. Sync downloads, which use random names in a private folder,
+  get the same protection.
+- **The HTTP debug trace hides storage tokens.** With `PROTONDRIVE_DEBUG_HTTP=2`, any header with "token" in its name
+  is now shown as `<redacted>`, like `Authorization` already was. That includes `pm-storage-token` on block uploads and
+  downloads.
+
 ## [0.2.9] - 2026-11-27
 
 ### Changed

@@ -1,4 +1,5 @@
 using NSkyLabs.ProtonDrive.Core.Diagnostics;
+using NSkyLabs.ProtonDrive.Core.IO;
 using NSkyLabs.ProtonDrive.Core.Auth;
 using NSkyLabs.ProtonDrive.Cli.Terminal;
 using Proton.Drive.Sdk;
@@ -247,10 +248,12 @@ internal static class DownloadCommand
 
         try
         {
+            var output = PartialFile.Create(partialPath);
+            await using (output.ConfigureAwait(false))
             using (var downloader = await client.GetFileDownloaderAsync(item.Node.ActiveRevision.Uid, cancellationToken).ConfigureAwait(false))
             {
-                var controller = downloader.DownloadToFile(
-                    partialPath,
+                var controller = downloader.DownloadToStream(
+                    output,
                     (written, _) => transfer.Report(written),
                     cancellationToken);
 

@@ -75,7 +75,8 @@ internal static class DeleteCommand
         Console.Error.WriteLine($"{verb}:");
         foreach (var target in targets)
         {
-            Console.Error.WriteLine(target.Node is FolderNode ? $"  {target.Path}/ (folder, with everything in it)" : $"  {target.Path}");
+            var shown = TerminalOutput.Name(target.Path.ToString());
+            Console.Error.WriteLine(target.Node is FolderNode ? $"  {shown}/ (folder, with everything in it)" : $"  {shown}");
         }
 
         foreach (var warning in GetSyncWarnings(targets))
@@ -117,7 +118,8 @@ internal static class DeleteCommand
 
         foreach (var target in targets.Where(t => !failures.Contains(t.Node.Uid.ToString())))
         {
-            Console.WriteLine(permanent ? $"Deleted {target.Path}" : $"Moved {target.Path} to the trash");
+            var shown = TerminalOutput.OutputName(target.Path.ToString());
+            Console.WriteLine(permanent ? $"Deleted {shown}" : $"Moved {shown} to the trash");
         }
 
         if (failures.Count > 0)

@@ -66,7 +66,7 @@ Sync invariants worth preserving (README "Sync" section has the full rules):
 - Proton Docs and Sheets have no content blocks, so they are skipped.
 
 **Deployment model**: installed system-wide as root, but sync runs as per-user systemd **user** units (templates
-in `packaging/systemd/*.in`, written by `ServiceCommand`). Per-user data lives in `~/.config/protondrive/`
+in `packaging/systemd/*.in`, installed by `packaging/install.sh` or `make install`; `ServiceCommand` only enables them). Per-user data lives in `~/.config/protondrive/`
 (`session.json`, or `session.cred` when encrypted with systemd-creds via `session encrypt`; `sync.json`) and
 `~/.local/state/protondrive/sync/`. Several processes can share one session
 (they coordinate through `session.lock`).

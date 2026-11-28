@@ -1,5 +1,6 @@
 using System.Collections.Concurrent;
 using System.Security.Cryptography;
+using NSkyLabs.ProtonDrive.Core.IO;
 using NSkyLabs.ProtonDrive.Sync.State;
 using Proton.Drive.Sdk;
 using Proton.Drive.Sdk.Nodes;
@@ -399,9 +400,11 @@ internal sealed class SyncExecutor
         {
             var report = _observer.TransferStarted(action);
 
+            var output = PartialFile.Create(temp);
+            await using (output.ConfigureAwait(false))
             using (var downloader = await _client.GetFileDownloaderAsync(RevisionUid.Parse(remote.RevisionUid!), cancellationToken).ConfigureAwait(false))
             {
-                var controller = downloader.DownloadToFile(temp, (done, _) => report(done), cancellationToken);
+                var controller = downloader.DownloadToStream(output, (done, _) => report(done), cancellationToken);
                 await using (controller.ConfigureAwait(false))
                 {
                     for (var attempt = 1; ; attempt++)

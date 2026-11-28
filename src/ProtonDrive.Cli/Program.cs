@@ -21,6 +21,9 @@ using var sigterm = PosixSignalRegistration.Create(PosixSignal.SIGTERM, context 
     cts.Cancel();
 });
 
+// Names from Proton Drive and the disk must not control the terminal (escape sequences in file names).
+TerminalOutput.Install();
+
 // What a long step is doing: a live status line on a terminal, an occasional line in logs.
 await using var activityStatus = ActivityStatus.Start(showLiveLine: !args.Any(a => a is "--no-progress" or "-q" or "--quiet"));
 

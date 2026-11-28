@@ -10,6 +10,7 @@
   <ItemGroup>
     <ProjectReference Include="../../src/ProtonDrive.Sync/ProtonDrive.Sync.csproj" />
     <ProjectReference Include="../../src/ProtonDrive.Core/ProtonDrive.Core.csproj" />
+    <ProjectReference Include="../../src/ProtonDrive.Cli/ProtonDrive.Cli.csproj" />
     <PackageReference Include="xunit.v3" Version="4.0.3" />
     <PackageReference Include="xunit.runner.visualstudio" Version="4.0.1" />
     <PackageReference Include="Microsoft.NET.Test.Sdk" Version="18.12.0" />

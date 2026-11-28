@@ -56,7 +56,7 @@ internal sealed class ConsoleSyncObserver(bool showProgress, bool quietWhenUpToD
         {
             var isFolder = action.Local?.IsFolder ?? action.Remote?.IsFolder ?? action.Base?.IsFolder ?? false;
             var path = decision.HeldOnServer ? RemotePathOf(pair, action.Path) : Path.Combine(pair.LocalPath, action.Path);
-            Console.Error.WriteLine(Ansi.Warning($"  {path}{(isFolder ? "/ (folder)" : string.Empty)}"));
+            Console.Error.WriteLine(Ansi.Warning($"  {TerminalOutput.Name(path)}{(isFolder ? "/ (folder)" : string.Empty)}"));
         }
 
         if (held.Count > MaxHeldShown)
@@ -146,7 +146,7 @@ internal sealed class ConsoleSyncObserver(bool showProgress, bool quietWhenUpToD
         }
 
         var message = error is ChangedDuringSyncException
-            ? Ansi.Warning($"Skipped {action.Path}: {error.Message}; it will be synced on the next run")
+            ? Ansi.Warning($"Skipped {TerminalOutput.Name(action.Path)}: {error.Message}; it will be synced on the next run")
             : Ansi.Error($"Failed: {DescribePlanned(action)}: {error.Message}");
 
         Write(message);
@@ -270,25 +270,25 @@ internal sealed class ConsoleSyncObserver(bool showProgress, bool quietWhenUpToD
 
     private static string DescribePlanned(SyncAction action, bool preview = false) => action.Kind switch
     {
-        SyncActionKind.MoveLocal => $"move {action.Path} -> {action.TargetPath} (moved on the server)",
-        SyncActionKind.MoveRemote => $"move /{action.Path} -> /{action.TargetPath} on Proton Drive (moved locally)",
-        SyncActionKind.RenameLocalForConflict => $"CONFLICT {action.Path}: a file on one side, a folder on the other; both will be kept",
-        SyncActionKind.TrashRemoteEarly or SyncActionKind.TrashRemote => $"trash /{action.Path} on Proton Drive",
-        SyncActionKind.TrashLocalEarly or SyncActionKind.TrashLocal => $"move {action.Path} to the local trash",
-        SyncActionKind.CreateLocalFolder => $"create folder {action.Path} locally",
-        SyncActionKind.CreateRemoteFolder => $"create folder /{action.Path} on Proton Drive",
-        SyncActionKind.Download => $"download {action.Path}",
-        SyncActionKind.UploadNew => $"upload {action.Path}",
-        SyncActionKind.UploadRevision => $"upload new version of {action.Path}",
-        SyncActionKind.ResolveFileConflict when !preview => $"{action.Path} changed on both sides: keep both unless identical",
+        SyncActionKind.MoveLocal => $"move {TerminalOutput.Name(action.Path)} -> {TerminalOutput.Name(action.TargetPath!)} (moved on the server)",
+        SyncActionKind.MoveRemote => $"move /{TerminalOutput.Name(action.Path)} -> /{TerminalOutput.Name(action.TargetPath!)} on Proton Drive (moved locally)",
+        SyncActionKind.RenameLocalForConflict => $"CONFLICT {TerminalOutput.Name(action.Path)}: a file on one side, a folder on the other; both will be kept",
+        SyncActionKind.TrashRemoteEarly or SyncActionKind.TrashRemote => $"trash /{TerminalOutput.Name(action.Path)} on Proton Drive",
+        SyncActionKind.TrashLocalEarly or SyncActionKind.TrashLocal => $"move {TerminalOutput.Name(action.Path)} to the local trash",
+        SyncActionKind.CreateLocalFolder => $"create folder {TerminalOutput.Name(action.Path)} locally",
+        SyncActionKind.CreateRemoteFolder => $"create folder /{TerminalOutput.Name(action.Path)} on Proton Drive",
+        SyncActionKind.Download => $"download {TerminalOutput.Name(action.Path)}",
+        SyncActionKind.UploadNew => $"upload {TerminalOutput.Name(action.Path)}",
+        SyncActionKind.UploadRevision => $"upload new version of {TerminalOutput.Name(action.Path)}",
+        SyncActionKind.ResolveFileConflict when !preview => $"{TerminalOutput.Name(action.Path)} changed on both sides: keep both unless identical",
         SyncActionKind.ResolveFileConflict => SyncExecutor.PreviewConflict(action) switch
         {
-            SyncExecutor.ConflictPreview.Conflict => $"CONFLICT {action.Path}: different on both sides ({FormatSizes(action)}); both versions will be kept",
-            SyncExecutor.ConflictPreview.Compare => $"{action.Path} is on both sides with the same size: compared by checksum when syncing, both kept if different",
-            _ => $"{action.Path} is identical on both sides (same size and time): recorded as in sync",
+            SyncExecutor.ConflictPreview.Conflict => $"CONFLICT {TerminalOutput.Name(action.Path)}: different on both sides ({FormatSizes(action)}); both versions will be kept",
+            SyncExecutor.ConflictPreview.Compare => $"{TerminalOutput.Name(action.Path)} is on both sides with the same size: compared by checksum when syncing, both kept if different",
+            _ => $"{TerminalOutput.Name(action.Path)} is identical on both sides (same size and time): recorded as in sync",
         },
-        SyncActionKind.RecordBase => $"record {action.Path} as in sync",
-        SyncActionKind.ForgetBase => $"forget {action.Path} (gone on both sides)",
+        SyncActionKind.RecordBase => $"record {TerminalOutput.Name(action.Path)} as in sync",
+        SyncActionKind.ForgetBase => $"forget {TerminalOutput.Name(action.Path)} (gone on both sides)",
         _ => action.ToString(),
     };
 
@@ -297,15 +297,15 @@ internal sealed class ConsoleSyncObserver(bool showProgress, bool quietWhenUpToD
 
     private static string? DescribeDone(SyncAction action, string? note) => action.Kind switch
     {
-        SyncActionKind.MoveLocal => $"Moved {action.Path} -> {action.TargetPath}",
-        SyncActionKind.MoveRemote => $"Moved /{action.Path} -> /{action.TargetPath} on Proton Drive",
-        SyncActionKind.RenameLocalForConflict => $"CONFLICT {action.Path}: a file on one side, a folder on the other; {note}",
-        SyncActionKind.ResolveFileConflict when IsConflict(action, note) => $"CONFLICT {action.Path}: different on both sides; {note}",
-        SyncActionKind.ResolveFileConflict => $"{action.Path} is on both sides: {note}",
-        SyncActionKind.TrashRemoteEarly or SyncActionKind.TrashRemote => $"Trashed /{action.Path} on Proton Drive",
-        SyncActionKind.TrashLocalEarly or SyncActionKind.TrashLocal => $"Moved {action.Path} to the local trash",
-        SyncActionKind.CreateLocalFolder => $"Created folder {action.Path}",
-        SyncActionKind.CreateRemoteFolder => $"Created folder /{action.Path} on Proton Drive",
+        SyncActionKind.MoveLocal => $"Moved {TerminalOutput.Name(action.Path)} -> {TerminalOutput.Name(action.TargetPath!)}",
+        SyncActionKind.MoveRemote => $"Moved /{TerminalOutput.Name(action.Path)} -> /{TerminalOutput.Name(action.TargetPath!)} on Proton Drive",
+        SyncActionKind.RenameLocalForConflict => $"CONFLICT {TerminalOutput.Name(action.Path)}: a file on one side, a folder on the other; {note}",
+        SyncActionKind.ResolveFileConflict when IsConflict(action, note) => $"CONFLICT {TerminalOutput.Name(action.Path)}: different on both sides; {note}",
+        SyncActionKind.ResolveFileConflict => $"{TerminalOutput.Name(action.Path)} is on both sides: {note}",
+        SyncActionKind.TrashRemoteEarly or SyncActionKind.TrashRemote => $"Trashed /{TerminalOutput.Name(action.Path)} on Proton Drive",
+        SyncActionKind.TrashLocalEarly or SyncActionKind.TrashLocal => $"Moved {TerminalOutput.Name(action.Path)} to the local trash",
+        SyncActionKind.CreateLocalFolder => $"Created folder {TerminalOutput.Name(action.Path)}",
+        SyncActionKind.CreateRemoteFolder => $"Created folder /{TerminalOutput.Name(action.Path)} on Proton Drive",
         _ => null,
     };
 }

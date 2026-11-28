@@ -20,6 +20,10 @@ folders.
   encryption and API calls all go through Proton's code; this project adds the command line and the sync
   engine. Proton does not publish these libraries on nuget.org, so this repository builds the packages from Proton's
   repositories, unchanged (see [Proton packages](#proton-packages)).
+- **Your password stays with Proton's code.** It is never stored, logged or accepted on the command line, and
+  the login itself is Proton's (SRP: the password is not sent to the server). The
+  [security review](SECURITY-REVIEW.md) shows, with references to the code, how your password, session and files
+  are handled.
 - **Sync follows the Drive events feed.** After the first sync, it asks Drive what changed since the last pass
   instead of walking the whole remote folder tree each time. That keeps it fast, and light on the API, with
   large folders. See [Finding changes](#sync).

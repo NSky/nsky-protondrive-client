@@ -13,6 +13,10 @@
   </ItemGroup>
 
   <ItemGroup>
+    <InternalsVisibleTo Include="NSkyLabs.ProtonDrive.Sync.Tests" />
+  </ItemGroup>
+
+  <ItemGroup>
     <Using Include="NSkyLabs.ProtonDrive.Core" />
     <Using Include="NSkyLabs.ProtonDrive.Core.Auth" />
     <Using Include="NSkyLabs.ProtonDrive.Core.Drive" />

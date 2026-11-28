@@ -15,6 +15,13 @@ internal static class HttpTrace
 
     private static bool IncludeHeaders { get; } = Environment.GetEnvironmentVariable("PROTONDRIVE_DEBUG_HTTP") is "2";
 
+    /// <summary>
+    /// The known credential headers, and any header whose name mentions a token (such as the SDK's
+    /// <c>pm-storage-token</c> on block uploads and downloads).
+    /// </summary>
+    internal static bool IsSecret(string headerName) =>
+        SecretHeaders.Contains(headerName) || headerName.Contains("token", StringComparison.OrdinalIgnoreCase);
+
     public static async Task<HttpResponseMessage> SendAsync(
         HttpRequestMessage request,
         Func<HttpRequestMessage, CancellationToken, Task<HttpResponseMessage>> send,
@@ -29,7 +36,7 @@ internal static class HttpTrace
         {
             foreach (var (name, values) in request.Headers)
             {
-                var shown = SecretHeaders.Contains(name) ? "<redacted>" : string.Join(" | ", values);
+                var shown = IsSecret(name) ? "<redacted>" : string.Join(" | ", values);
                 Console.Error.WriteLine($"[http]   {name}: {shown}");
             }
         }

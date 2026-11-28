@@ -123,7 +123,7 @@ internal sealed class ActivityStatus : IAsyncDisposable
     {
         if (_drawn)
         {
-            _error.Write("\r\u001b[K");
+            TerminalOutput.WriteTrusted(_error, "\r\u001b[K");
             _error.Flush();
             _drawn = false;
         }
@@ -146,8 +146,8 @@ internal sealed class ActivityStatus : IAsyncDisposable
                     }
 
                     _frame = (_frame + 1) % Frames.Length;
-                    var line = Frames[_frame] + " " + Describe(step, GetConsoleWidth() - 2);
-                    _error.Write("\r" + line + "\u001b[K");
+                    var line = Frames[_frame] + " " + TerminalOutput.Name(Describe(step, GetConsoleWidth() - 2));
+                    TerminalOutput.WriteTrusted(_error, "\r" + line + "\u001b[K");
                     _error.Flush();
                     _drawn = true;
                 }

@@ -1,3 +1,4 @@
+using NSkyLabs.ProtonDrive.Cli.Terminal;
 using NSkyLabs.ProtonDrive.Core.Diagnostics;
 using System.Globalization;
 using NSkyLabs.ProtonDrive.Core.Auth;
@@ -50,7 +51,7 @@ internal static class ListCommand
 
         foreach (var row in rows)
         {
-            Console.WriteLine($"{row.Type}  {row.Modified}  {row.Size.PadLeft(sizeWidth)}  {row.Name}{(row.IsFolder ? "/" : string.Empty)}");
+            Console.WriteLine($"{row.Type}  {row.Modified}  {row.Size.PadLeft(sizeWidth)}  {TerminalOutput.OutputName(row.Name)}{(row.IsFolder ? "/" : string.Empty)}");
         }
 
         return 0;

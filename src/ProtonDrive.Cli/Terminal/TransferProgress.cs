@@ -84,7 +84,7 @@ internal sealed class TransferProgress : IAsyncDisposable
 
         if (succeeded && _enabled && !_interactive)
         {
-            WriteLine($"{transfer.Verb} {transfer.Name}");
+            WriteLine($"{transfer.Verb} {TerminalOutput.Name(transfer.Name)}");
         }
     }
 
@@ -95,13 +95,13 @@ internal sealed class TransferProgress : IAsyncDisposable
         {
             var output = new StringBuilder();
             AppendClear(output);
-            output.Append(message).Append('\n');
+            output.Append(TerminalOutput.Message(message)).Append('\n');
             if (_interactive)
             {
                 AppendBlock(output);
             }
 
-            Console.Error.Write(output.ToString());
+            TerminalOutput.WriteTrusted(Console.Error, output.ToString());
         }
     }
 
@@ -114,7 +114,7 @@ internal sealed class TransferProgress : IAsyncDisposable
         {
             var output = new StringBuilder();
             AppendClear(output);
-            Console.Error.Write(output.ToString());
+            TerminalOutput.WriteTrusted(Console.Error, output.ToString());
         }
 
         _stopRendering.Dispose();
@@ -159,7 +159,7 @@ internal sealed class TransferProgress : IAsyncDisposable
                     var output = new StringBuilder();
                     AppendClear(output);
                     AppendBlock(output);
-                    Console.Error.Write(output.ToString());
+                    TerminalOutput.WriteTrusted(Console.Error, output.ToString());
                 }
             }
             while (await timer.WaitForNextTickAsync(cancellationToken).ConfigureAwait(false));
@@ -201,14 +201,15 @@ internal sealed class TransferProgress : IAsyncDisposable
         if (shown.Count > 0)
         {
             var sizeColumn = shown.Max(f => FormatFileBytes(f).Length);
-            var nameColumn = Math.Max(1, Math.Min(shown.Max(f => f.Name.Length), width - sizeColumn - 9));
+            var names = shown.ToDictionary(f => f, f => TerminalOutput.Name(f.Name));
+            var nameColumn = Math.Max(1, Math.Min(names.Values.Max(n => n.Length), width - sizeColumn - 9));
 
             foreach (var file in shown)
             {
                 var size = FormatFileBytes(file);
                 lines.Add(string.Create(
                     CultureInfo.InvariantCulture,
-                    $"{file.Percent,4}%  {ShortenStart(file.Name, nameColumn).PadRight(nameColumn)}  {size.PadLeft(sizeColumn)}"));
+                    $"{file.Percent,4}%  {ShortenStart(names[file], nameColumn).PadRight(nameColumn)}  {size.PadLeft(sizeColumn)}"));
             }
 
             if (_active.Count > shown.Count)
