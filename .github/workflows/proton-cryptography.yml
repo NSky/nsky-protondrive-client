@@ -254,15 +254,16 @@ jobs:
       - name: Run tests (linux-x64)
         run: dotnet run --project tests/dotnet/Proton.Cryptography.Tests.csproj -c Release -p:TreatWarningsAsErrors=false
 
-      # The release notes name the exact upstream commit: the weekly check reads them back.
+      # The repository fields point at Proton's sources, the release notes at the build that packed them.
+      # Both name the exact upstream commit: the weekly check reads it back.
       - name: Pack
         run: |
           dotnet pack src/dotnet/Proton.Cryptography.csproj -c Release \
             -p:Version="${VERSION}" \
             -p:TreatWarningsAsErrors=false \
-            -p:RepositoryUrl="${GITHUB_SERVER_URL}/${GITHUB_REPOSITORY}" \
+            -p:RepositoryUrl="${GITHUB_SERVER_URL}/${UPSTREAM}" \
             -p:RepositoryType=git \
-            -p:RepositoryCommit="${GITHUB_SHA}" \
+            -p:RepositoryCommit="${UPSTREAM_SHA}" \
             -p:PackageReleaseNotes="Built unchanged from https://github.com/${UPSTREAM}/commit/${UPSTREAM_SHA} by ${GITHUB_SERVER_URL}/${GITHUB_REPOSITORY}/actions/runs/${GITHUB_RUN_ID}" \
             --output out
 
