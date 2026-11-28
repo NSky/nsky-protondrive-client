@@ -3,6 +3,15 @@
 All notable changes to protondrive-client are listed here, newest first. The format follows
 [Keep a Changelog](https://keepachangelog.com/en/1.1.0/), and versions follow [Semantic Versioning](https://semver.org/).
 
+## [0.2.9] - 2026-11-27
+
+### Changed
+
+- **Proton's libraries are now built straight from Proton's repositories.** The Drive SDK packages
+  (`Proton.Drive.Sdk`, `Proton.Drive.Sdk.Account`) are Proton's C# release 0.33.1, and `Proton.Cryptography` 0.40.1
+  is built from Proton's `dotnet-crypto`. Both are built by this repository's workflows instead of from forks. The
+  code is the same as in 0.2.8; only the version numbers now match Proton's.
+
 ## [0.2.8] - 2026-11-27
 
 ### Changed

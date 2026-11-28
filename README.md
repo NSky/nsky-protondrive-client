@@ -18,8 +18,8 @@ folders.
 - **Built on Proton's own open-source libraries:** the [Proton Drive SDK](https://github.com/ProtonDriveApps/sdk)
   and Proton's [cryptography library](https://github.com/ProtonDriveApps/dotnet-crypto). Login, keys,
   encryption and API calls all go through Proton's code; this project adds the command line and the sync
-  engine. Proton does not publish these libraries on nuget.org, so the packages are built from forks of their
-  repositories (see [Proton packages](#proton-packages)).
+  engine. Proton does not publish these libraries on nuget.org, so this repository builds the packages from Proton's
+  repositories, unchanged (see [Proton packages](#proton-packages)).
 - **Sync follows the Drive events feed.** After the first sync, it asks Drive what changed since the last pass
   instead of walking the whole remote folder tree each time. That keeps it fast, and light on the API, with
   large folders. See [Finding changes](#sync).
@@ -119,8 +119,8 @@ The Proton packages are not published on nuget.org. They come from the GitHub Pa
 
 | Package | Built from | By |
 | --- | --- | --- |
-| `Proton.Sdk`, `Proton.Drive.Sdk`, `Proton.Drive.Sdk.Account` | [ProtonDriveApps/sdk](https://github.com/ProtonDriveApps/sdk) release tags, unchanged | `.github/workflows/proton-drive-sdk.yml` in this repository (0.1.0: the fork [NSky/proton-drive-sdk](https://github.com/NSky/proton-drive-sdk)) |
-| `Proton.Cryptography` (linux-x64, linux-arm64; up to 0.40.1 also win-x64, osx-arm64, osx-x64) | [ProtonDriveApps/dotnet-crypto](https://github.com/ProtonDriveApps/dotnet-crypto), unchanged | `.github/workflows/proton-cryptography.yml` in this repository (up to 0.40.1: the fork [NSky/proton-dotnet-crypto](https://github.com/NSky/proton-dotnet-crypto)) |
+| `Proton.Sdk`, `Proton.Drive.Sdk`, `Proton.Drive.Sdk.Account` | [ProtonDriveApps/sdk](https://github.com/ProtonDriveApps/sdk) release tags, unchanged | `.github/workflows/proton-drive-sdk.yml` in this repository |
+| `Proton.Cryptography` (linux-x64, linux-arm64) | [ProtonDriveApps/dotnet-crypto](https://github.com/ProtonDriveApps/dotnet-crypto), unchanged | `.github/workflows/proton-cryptography.yml` in this repository |
 
 **`Proton.Cryptography`** is built here straight from Proton's repository. Every Monday the workflow checks whether
 Proton's `main` branch has commits that the latest published package was not built from. If it has, it builds the
