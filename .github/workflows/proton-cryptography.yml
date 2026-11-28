@@ -170,7 +170,7 @@ jobs:
       run:
         shell: bash
     steps:
-      - uses: actions/checkout@v4
+      - uses: actions/checkout@v7
         with:
           repository: ${{ env.UPSTREAM }}
           ref: ${{ needs.check.outputs.sha }}
@@ -183,7 +183,7 @@ jobs:
           rustup target add ${{ matrix.target }}
 
       - name: Cache Cargo registry and build output
-        uses: actions/cache@v4
+        uses: actions/cache@v6
         with:
           path: |
             ~/.cargo/registry/index
@@ -206,7 +206,7 @@ jobs:
              bin/runtimes/${{ matrix.rid }}/native/${{ matrix.packaged }}
           ls -la bin/runtimes/${{ matrix.rid }}/native
 
-      - uses: actions/upload-artifact@v4
+      - uses: actions/upload-artifact@v7
         with:
           name: native-${{ matrix.rid }}
           path: bin/runtimes/${{ matrix.rid }}/
@@ -224,18 +224,18 @@ jobs:
       VERSION: ${{ needs.check.outputs.version }}
       UPSTREAM_SHA: ${{ needs.check.outputs.sha }}
     steps:
-      - uses: actions/checkout@v4
+      - uses: actions/checkout@v7
         with:
           repository: ${{ env.UPSTREAM }}
           ref: ${{ needs.check.outputs.sha }}
           persist-credentials: false
 
-      - uses: actions/setup-dotnet@v4
+      - uses: actions/setup-dotnet@v6
         with:
           dotnet-version: 10.0.x
 
       - name: Download native libraries
-        uses: actions/download-artifact@v4
+        uses: actions/download-artifact@v8
         with:
           pattern: native-*
           path: artifacts
@@ -280,7 +280,7 @@ jobs:
           unzip -p "${package}" '*.nuspec' | grep -qF "${UPSTREAM}/commit/${UPSTREAM_SHA}" \
             || { echo "::error::The package does not record the upstream commit"; exit 1; }
 
-      - uses: actions/upload-artifact@v4
+      - uses: actions/upload-artifact@v7
         with:
           name: nuget-package
           path: out/*.nupkg
