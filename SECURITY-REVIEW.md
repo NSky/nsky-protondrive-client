@@ -1,7 +1,7 @@
 # Security review
 
 <p align="center">
-  <img src=".github/security-review.svg" width="720"
+  <img src="docs/images/security-review.svg" width="720"
        alt="Security review of protondrive 0.2.10, 27 November 2026: no high- or medium-severity issues. Reviewed by the project with AI assistance, not an independent audit.">
 </p>
 

@@ -1,0 +1,43 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<!--
+  Square app icon for listings (AlternativeTo and the like). Same palette as social-preview.svg.
+  A P (for Proton Drive) with a terminal cursor, inside two-way sync arrows. Deliberately no Proton logo or brand colours: this is an
+  unofficial project.
+  Render: rsvg-convert -w 512 -h 512 icon.svg -o icon.png
+-->
+<svg xmlns="http://www.w3.org/2000/svg" width="512" height="512" viewBox="0 0 512 512">
+  <defs>
+    <linearGradient id="bg" x1="0" y1="0" x2="1" y2="1">
+      <stop offset="0" stop-color="#0b1220"/>
+      <stop offset="1" stop-color="#14213d"/>
+    </linearGradient>
+    <radialGradient id="glow" cx="0.5" cy="0.45" r="0.6">
+      <stop offset="0" stop-color="#2dd4bf" stop-opacity="0.22"/>
+      <stop offset="1" stop-color="#2dd4bf" stop-opacity="0"/>
+    </radialGradient>
+    <linearGradient id="arrow" x1="0" y1="0" x2="1" y2="1">
+      <stop offset="0" stop-color="#5eead4"/>
+      <stop offset="1" stop-color="#14b8a6"/>
+    </linearGradient>
+  </defs>
+
+  <rect width="512" height="512" rx="112" fill="url(#bg)"/>
+  <rect width="512" height="512" rx="112" fill="url(#glow)"/>
+  <rect x="2" y="2" width="508" height="508" rx="110" fill="none" stroke="#1f2d47" stroke-width="4"/>
+
+  <!-- Two-way sync arrows: two arcs around the centre, each ending in an arrow head -->
+  <g fill="none" stroke="url(#arrow)" stroke-width="30" stroke-linecap="round" stroke-linejoin="round">
+    <path d="M118 214 A144 144 0 0 1 368 150"/>
+    <path d="M394 298 A144 144 0 0 1 144 362"/>
+  </g>
+  <g fill="url(#arrow)">
+    <path d="M404 122 L398 196 L330 168 Z"/>
+    <path d="M108 390 L114 316 L182 344 Z"/>
+  </g>
+
+  <!-- P for Proton Drive: a plain geometric letter (not Proton's logo mark), with a terminal cursor -->
+  <g fill="none" stroke="#f1f5f9" stroke-width="32" stroke-linecap="round" stroke-linejoin="round">
+    <path d="M214 330 V182 H262 A44 44 0 0 1 262 270 H214"/>
+  </g>
+  <path d="M268 330 H314" stroke="#2dd4bf" stroke-width="28" stroke-linecap="round"/>
+</svg>

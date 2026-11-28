@@ -1,5 +1,5 @@
 <p align="center">
-  <img src=".github/social-preview.png" width="800"
+  <img src="docs/images/social-preview.png" width="800"
        alt="protondrive: command-line client for Proton Drive, with two-way folder sync">
 </p>
 
