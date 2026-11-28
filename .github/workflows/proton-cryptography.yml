@@ -49,6 +49,7 @@ concurrency:
 env:
   UPSTREAM: ProtonDriveApps/dotnet-crypto
   PACKAGE_ID: Proton.Cryptography
+  TOOLS: .ci/.github/scripts/proton-package.sh
   CARGO_TERM_COLOR: always
   DOTNET_NOLOGO: true
   DOTNET_CLI_TELEMETRY_OPTOUT: true
@@ -65,11 +66,17 @@ jobs:
       sha: ${{ steps.check.outputs.sha }}
       version: ${{ steps.check.outputs.version }}
     steps:
+      - uses: actions/checkout@v7
+        with:
+          path: .ci
+          sparse-checkout: .github/scripts/proton-package.sh
+          sparse-checkout-cone-mode: false
+          persist-credentials: false
+
       - name: Compare upstream with the published package
         id: check
         env:
           GH_TOKEN: ${{ github.token }}
-          FEED: https://nuget.pkg.github.com/${{ github.repository_owner }}/download/proton.cryptography
           INPUT_REF: ${{ inputs.upstream_ref }}
           INPUT_VERSION: ${{ inputs.version }}
         run: |
@@ -77,26 +84,13 @@ jobs:
           sha=$(gh api "repos/${UPSTREAM}/commits/${INPUT_REF:-main}" --jq .sha)
           echo "Upstream ${INPUT_REF:-main}: ${sha}"
 
-          # Published versions; a missing package (404) means none yet, anything else is an error.
-          status=$(curl -sS -o versions.json -w '%{http_code}' -u "x:${GH_TOKEN}" "${FEED}/index.json")
-          case "${status}" in
-            200) versions=$(jq -r '.versions[]' versions.json | sort -V) ;;
-            404) versions="" ;;
-            *) echo "::error::Reading the published versions failed (HTTP ${status}). Does this repository have access to the ${PACKAGE_ID} package?"; exit 1 ;;
-          esac
+          versions=$("${TOOLS}" versions "${PACKAGE_ID}")
           latest=$(printf '%s\n' "${versions}" | tail -n 1)
           echo "Latest published version: ${latest:-none}"
 
-          # The upstream commit the latest version was built from: recorded in its release notes, or for packages
-          # built by the older fork-based workflow, the fork commit in <repository commit="...">.
           built_from=""
           if [ -n "${latest}" ]; then
-            curl -fsSL -o latest.nupkg -u "x:${GH_TOKEN}" "${FEED}/${latest}/proton.cryptography.${latest}.nupkg"
-            nuspec=$(unzip -p latest.nupkg '*.nuspec')
-            built_from=$(grep -oE "github\.com/${UPSTREAM}/commit/[0-9a-f]{40}" <<< "${nuspec}" | head -n 1 | grep -oE '[0-9a-f]{40}$' || true)
-            if [ -z "${built_from}" ]; then
-              built_from=$(grep -oE 'commit="[0-9a-f]{40}"' <<< "${nuspec}" | head -n 1 | grep -oE '[0-9a-f]{40}' || true)
-            fi
+            built_from=$("${TOOLS}" built-from "${PACKAGE_ID}" "${latest}")
           fi
           echo "Latest version built from: ${built_from:-unknown}"
 
@@ -166,9 +160,6 @@ jobs:
             target: aarch64-unknown-linux-gnu
             built: libproton_crypto.so
             packaged: libproton_crypto.so
-    defaults:
-      run:
-        shell: bash
     steps:
       - uses: actions/checkout@v7
         with:
@@ -194,9 +185,6 @@ jobs:
 
       - name: Build
         working-directory: src/rust/proton-crypto-ffi
-        env:
-          # Used by build.rs as the BUILD component of the Windows DLL file version.
-          CI_PIPELINE_IID: ${{ github.run_number }}
         run: cargo build --release --target ${{ matrix.target }}
 
       - name: Stage library
@@ -223,11 +211,19 @@ jobs:
     env:
       VERSION: ${{ needs.check.outputs.version }}
       UPSTREAM_SHA: ${{ needs.check.outputs.sha }}
+      GH_TOKEN: ${{ github.token }}
     steps:
       - uses: actions/checkout@v7
         with:
           repository: ${{ env.UPSTREAM }}
           ref: ${{ needs.check.outputs.sha }}
+          persist-credentials: false
+
+      - uses: actions/checkout@v7
+        with:
+          path: .ci
+          sparse-checkout: .github/scripts/proton-package.sh
+          sparse-checkout-cone-mode: false
           persist-credentials: false
 
       - uses: actions/setup-dotnet@v6
@@ -254,31 +250,15 @@ jobs:
       - name: Run tests (linux-x64)
         run: dotnet run --project tests/dotnet/Proton.Cryptography.Tests.csproj -c Release -p:TreatWarningsAsErrors=false
 
-      # The repository fields point at Proton's sources, the release notes at the build that packed them.
-      # Both name the exact upstream commit: the weekly check reads it back.
       - name: Pack
-        run: |
-          dotnet pack src/dotnet/Proton.Cryptography.csproj -c Release \
-            -p:Version="${VERSION}" \
-            -p:TreatWarningsAsErrors=false \
-            -p:RepositoryUrl="${GITHUB_SERVER_URL}/${UPSTREAM}" \
-            -p:RepositoryType=git \
-            -p:RepositoryCommit="${UPSTREAM_SHA}" \
-            -p:PackageReleaseNotes="Built unchanged from https://github.com/${UPSTREAM}/commit/${UPSTREAM_SHA} by ${GITHUB_SERVER_URL}/${GITHUB_REPOSITORY}/actions/runs/${GITHUB_RUN_ID}" \
-            --output out
+        run: ${TOOLS} pack src/dotnet/Proton.Cryptography.csproj -p:TreatWarningsAsErrors=false
 
       - name: Verify package contents
         run: |
-          package="out/${PACKAGE_ID}.${VERSION}.nupkg"
-          unzip -l "${package}"
-          for lib in \
+          ${TOOLS} verify "out/${PACKAGE_ID}.${VERSION}.nupkg" \
             runtimes/linux-x64/native/libproton_crypto.so \
             runtimes/linux-arm64/native/libproton_crypto.so \
-            lib/net10.0/Proton.Cryptography.dll; do
-            unzip -l "${package}" "${lib}" > /dev/null || { echo "::error::${lib} is missing from the package"; exit 1; }
-          done
-          unzip -p "${package}" '*.nuspec' | grep -qF "${UPSTREAM}/commit/${UPSTREAM_SHA}" \
-            || { echo "::error::The package does not record the upstream commit"; exit 1; }
+            lib/net10.0/Proton.Cryptography.dll
 
       - uses: actions/upload-artifact@v7
         with:
@@ -288,11 +268,4 @@ jobs:
 
       - name: Publish to GitHub Packages
         if: github.event_name == 'schedule' || inputs.publish
-        env:
-          NUGET_API_KEY: ${{ secrets.GITHUB_TOKEN }}
-        run: |
-          dotnet nuget push "out/${PACKAGE_ID}.${VERSION}.nupkg" \
-            --source "https://nuget.pkg.github.com/${GITHUB_REPOSITORY_OWNER}/index.json" \
-            --api-key "${NUGET_API_KEY}" \
-            --no-symbols
-          echo "- Published **${PACKAGE_ID} ${VERSION}**" >> "${GITHUB_STEP_SUMMARY}"
+        run: ${TOOLS} push "out/${PACKAGE_ID}.${VERSION}.nupkg"

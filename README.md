@@ -119,7 +119,7 @@ The Proton packages are not published on nuget.org. They come from the GitHub Pa
 
 | Package | Built from | By |
 | --- | --- | --- |
-| `Proton.Sdk`, `Proton.Drive.Sdk`, `Proton.Drive.Sdk.Account` | [NSky/proton-drive-sdk](https://github.com/NSky/proton-drive-sdk) (a fork) | that fork's workflow |
+| `Proton.Sdk`, `Proton.Drive.Sdk`, `Proton.Drive.Sdk.Account` | [ProtonDriveApps/sdk](https://github.com/ProtonDriveApps/sdk) release tags, unchanged | `.github/workflows/proton-drive-sdk.yml` in this repository (0.1.0: the fork [NSky/proton-drive-sdk](https://github.com/NSky/proton-drive-sdk)) |
 | `Proton.Cryptography` (linux-x64, linux-arm64; up to 0.40.1 also win-x64, osx-arm64, osx-x64) | [ProtonDriveApps/dotnet-crypto](https://github.com/ProtonDriveApps/dotnet-crypto), unchanged | `.github/workflows/proton-cryptography.yml` in this repository (up to 0.40.1: the fork [NSky/proton-dotnet-crypto](https://github.com/NSky/proton-dotnet-crypto)) |
 
 **`Proton.Cryptography`** is built here straight from Proton's repository. Every Monday the workflow checks whether
@@ -131,6 +131,20 @@ Actions tab, for any upstream branch, tag or commit, with a chosen version, and 
 package version is not used until the version in `ProtonDrive.Core.csproj` is raised. Publishing needs this
 repository to have the **Write** role on the package (package settings, **Manage Actions access**). GitHub turns
 off scheduled workflows in a repository with no activity for 60 days; re-enable it on the Actions tab if that happens.
+
+**The SDK packages** are built here from Proton's C# releases. Every Monday, after the `Proton.Cryptography` check,
+the workflow looks for Proton's latest `cs/vX.Y.Z` tag and, if that version is not on the feed yet, builds the three
+packages with Proton's version number (so `cs/v0.33.1` becomes 0.33.1). The sources are unchanged; only the build
+setup differs: `nuget.config` is replaced so that `Proton.Cryptography` comes from this feed, and Proton's NuGet lock
+files are not used, because they pin Proton's own build of `Proton.Cryptography`. The SDK is built with the Rust
+crypto backend, like Proton's own packages. The check stops with an error if the feed does not have the
+`Proton.Cryptography` version that release needs (`RustCryptoVersion` in Proton's `config/cs/Packages.props`); build
+it first with the `Proton.Cryptography` workflow and that version. Run by hand, the workflow builds any upstream ref;
+one that is not a release tag needs an explicit version. Publishing needs the **Write** role on each of the three
+packages, as above.
+
+Both workflows share `.github/scripts/proton-package.sh`: it reads the feed, packs with the upstream repository and
+commit recorded, checks the packages and pushes them.
 
 Their versions are set in `src/ProtonDrive.Core/ProtonDrive.Core.csproj`, like any other package version (`Proton.Sdk`
 comes with `Proton.Drive.Sdk`). Keep `Proton.Drive.Sdk` and `Proton.Drive.Sdk.Account` at the same version.

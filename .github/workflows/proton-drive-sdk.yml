@@ -1,0 +1,218 @@
+name: Proton Drive SDK packages
+
+# Builds Proton's official .NET Drive SDK (https://github.com/ProtonDriveApps/sdk) into the NuGet packages
+# Proton.Sdk, Proton.Drive.Sdk and Proton.Drive.Sdk.Account and publishes them to this repository owner's GitHub
+# Packages feed:
+#   https://nuget.pkg.github.com/<owner>/index.json
+# Proton does not publish them on nuget.org. The sources are used exactly as Proton publishes them. Only the build
+# setup differs: nuget.config is replaced so that Proton.Cryptography comes from this feed (built by
+# proton-cryptography.yml), and the NuGet lock files are not used, because they pin Proton's own build of
+# Proton.Cryptography. The SDK is built with the Rust crypto backend, as Proton's own packages are.
+#
+# - Weekly (Mondays, after the Proton.Cryptography check), it looks for Proton's latest C# release tag (cs/vX.Y.Z)
+#   and, if that version is not published yet, builds and publishes it with the same version number.
+# - Run it by hand from the Actions tab to build any upstream ref, with or without publishing. A ref other than a
+#   cs/v* tag needs an explicit version.
+#
+# The Proton.Cryptography version the SDK needs (RustCryptoVersion in config/cs/Packages.props) must be on the feed
+# first. Publishing needs this repository to have the Write role on each of the three packages, and reading
+# Proton.Cryptography the Read role (package settings, "Manage Actions access").
+#
+# This does not change which version protondrive-client uses: that is set in src/ProtonDrive.Core/ProtonDrive.Core.csproj.
+
+on:
+  schedule:
+    - cron: "47 5 * * 1"
+  workflow_dispatch:
+    inputs:
+      upstream_ref:
+        description: "Upstream branch, tag or commit of ProtonDriveApps/sdk (default: the latest cs/v* release tag)"
+        required: false
+        type: string
+      version:
+        description: "Package version, e.g. 0.33.1 (default: the version in the cs/v* tag)"
+        required: false
+        type: string
+      publish:
+        description: "Push the packages to GitHub Packages (otherwise only upload them as a workflow artifact)"
+        required: false
+        type: boolean
+        default: true
+
+permissions:
+  contents: read
+
+concurrency:
+  group: proton-drive-sdk
+  cancel-in-progress: false
+
+env:
+  UPSTREAM: ProtonDriveApps/sdk
+  PACKAGES: Proton.Sdk Proton.Drive.Sdk Proton.Drive.Sdk.Account
+  TOOLS: .ci/.github/scripts/proton-package.sh
+  DOTNET_NOLOGO: true
+  DOTNET_CLI_TELEMETRY_OPTOUT: true
+
+jobs:
+  check:
+    name: Check upstream
+    runs-on: ubuntu-24.04
+    permissions:
+      contents: read
+      packages: read
+    outputs:
+      build: ${{ steps.check.outputs.build }}
+      ref: ${{ steps.check.outputs.ref }}
+      sha: ${{ steps.check.outputs.sha }}
+      version: ${{ steps.check.outputs.version }}
+    steps:
+      - uses: actions/checkout@v7
+        with:
+          path: .ci
+          sparse-checkout: .github/scripts/proton-package.sh
+          sparse-checkout-cone-mode: false
+          persist-credentials: false
+
+      - name: Compare upstream with the published packages
+        id: check
+        env:
+          GH_TOKEN: ${{ github.token }}
+          INPUT_REF: ${{ inputs.upstream_ref }}
+          INPUT_VERSION: ${{ inputs.version }}
+        run: |
+          set -euo pipefail
+
+          # Release tags look like cs/v0.33.1 (a few early ones lack the v).
+          tag_version() { sed -nE 's#^(refs/tags/)?cs/v?([0-9]+\.[0-9]+\.[0-9]+(-[0-9A-Za-z.-]+)?)$#\2#p'; }
+
+          ref="${INPUT_REF}"
+          if [ -z "${ref}" ]; then
+            latest=$(gh api --paginate "repos/${UPSTREAM}/git/matching-refs/tags/cs/" --jq '.[].ref' \
+              | tag_version | "${TOOLS}" sort-versions | tail -n 1)
+            [ -n "${latest}" ] || { echo "::error::${UPSTREAM} has no cs/v* release tags"; exit 1; }
+            ref="cs/v${latest}"
+            gh api "repos/${UPSTREAM}/git/ref/tags/${ref}" > /dev/null 2>&1 || ref="cs/${latest}"
+          fi
+          sha=$(gh api "repos/${UPSTREAM}/commits/${ref}" --jq .sha)
+          echo "Upstream ${ref}: ${sha}"
+
+          version="${INPUT_VERSION:-$(tag_version <<< "${ref}")}"
+          if [ -z "${version}" ]; then
+            echo "::error::'${ref}' is not a cs/v* release tag; give the package version."
+            exit 1
+          fi
+          if ! [[ "${version}" =~ ^[0-9]+\.[0-9]+\.[0-9]+(-[0-9A-Za-z.-]+)?$ ]]; then
+            echo "::error::'${version}' is not a valid package version (expected MAJOR.MINOR.PATCH[-suffix])"
+            exit 1
+          fi
+
+          # Which of the packages already have this version. A partly published set is completed.
+          missing=""
+          for id in ${PACKAGES}; do
+            published=$("${TOOLS}" versions "${id}")
+            if ! grep -qxF "${version}" <<< "${published}"; then
+              missing="${missing} ${id}"
+            fi
+          done
+          missing="${missing# }"
+
+          build=true
+          if [ -z "${missing}" ]; then
+            if [ "${GITHUB_EVENT_NAME}" = "schedule" ]; then
+              build=false
+            else
+              echo "::error::Version ${version} of ${PACKAGES} is already published; choose another version."
+              exit 1
+            fi
+          fi
+
+          # The SDK restores Proton.Cryptography from the feed; it must have the version this ref was released with.
+          crypto=$(gh api "repos/${UPSTREAM}/contents/config/cs/Packages.props?ref=${sha}" --jq .content | base64 -d \
+            | sed -n 's:.*<RustCryptoVersion>\(.*\)</RustCryptoVersion>.*:\1:p')
+          echo "Needs Proton.Cryptography ${crypto:-unknown}"
+          if [ "${build}" = true ] && [ -n "${crypto}" ] && ! grep -qxF "${crypto}" <<< "$("${TOOLS}" versions Proton.Cryptography)"; then
+            echo "::error::Proton.Cryptography ${crypto} is not published; build it first with the Proton.Cryptography package workflow (version ${crypto})."
+            exit 1
+          fi
+
+          {
+            echo "build=${build}"
+            echo "ref=${ref}"
+            echo "sha=${sha}"
+            echo "version=${version}"
+          } >> "${GITHUB_OUTPUT}"
+
+          {
+            echo "### Proton Drive SDK"
+            echo "- Upstream \`${ref}\`: [\`${sha:0:12}\`](https://github.com/${UPSTREAM}/commit/${sha})"
+            echo "- Needs Proton.Cryptography ${crypto:-unknown}"
+            if [ "${build}" = true ]; then
+              echo "- Building **${version}** of ${missing}"
+            else
+              echo "- Up to date: ${version} is published"
+            fi
+          } >> "${GITHUB_STEP_SUMMARY}"
+
+  pack:
+    name: Pack and publish
+    needs: check
+    if: needs.check.outputs.build == 'true'
+    runs-on: ubuntu-24.04
+    permissions:
+      contents: read
+      packages: write
+    env:
+      VERSION: ${{ needs.check.outputs.version }}
+      UPSTREAM_REF: ${{ needs.check.outputs.ref }}
+      UPSTREAM_SHA: ${{ needs.check.outputs.sha }}
+      GH_TOKEN: ${{ github.token }}
+      NUGET_FEED_TOKEN: ${{ github.token }}
+    steps:
+      - uses: actions/checkout@v7
+        with:
+          repository: ${{ env.UPSTREAM }}
+          ref: ${{ needs.check.outputs.sha }}
+          persist-credentials: false
+
+      - uses: actions/checkout@v7
+        with:
+          path: .ci
+          sparse-checkout: .github/scripts/proton-package.sh
+          sparse-checkout-cone-mode: false
+          persist-credentials: false
+
+      - uses: actions/setup-dotnet@v6
+        with:
+          dotnet-version: 10.0.x
+
+      - name: Use this feed for Proton.Cryptography
+        run: ${TOOLS} nuget-config
+
+      # Proton.Drive.Sdk.Account references the other two, so their packages depend on the same version.
+      - name: Pack
+        run: |
+          for project in \
+            client/cs/src/Proton.Sdk/Proton.Sdk.csproj \
+            client/cs/src/Proton.Drive.Sdk/Proton.Drive.Sdk.csproj \
+            incubating/account/cs/src/Proton.Drive.Sdk.Account/Proton.Drive.Sdk.Account.csproj; do
+            ${TOOLS} pack "${project}" \
+              -p:CryptoBackend=rust -restoreProperty:CryptoBackend=rust \
+              -p:_ProtonUseLockFile=false -restoreProperty:_ProtonUseLockFile=false
+          done
+
+      - name: Verify package contents
+        run: |
+          for id in ${PACKAGES}; do
+            ${TOOLS} verify "out/${id}.${VERSION}.nupkg" "lib/net10.0/${id}.dll"
+          done
+
+      - uses: actions/upload-artifact@v7
+        with:
+          name: nuget-packages
+          path: out/*.nupkg
+          if-no-files-found: error
+
+      - name: Publish to GitHub Packages
+        if: github.event_name == 'schedule' || inputs.publish
+        run: |
+          ${TOOLS} push $(for id in ${PACKAGES}; do echo "out/${id}.${VERSION}.nupkg"; done)

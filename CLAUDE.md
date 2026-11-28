@@ -90,5 +90,8 @@ Exit codes the units rely on:
 - `.github/workflows/proton-cryptography.yml` builds Proton's unchanged `ProtonDriveApps/dotnet-crypto` into the
   `Proton.Cryptography` package on the same feed. It runs weekly and publishes the next patch version when upstream
   `main` moved, and it never changes the version this app references.
+- `.github/workflows/proton-drive-sdk.yml` does the same for `Proton.Sdk`, `Proton.Drive.Sdk` and
+  `Proton.Drive.Sdk.Account` from `ProtonDriveApps/sdk`, weekly, taking the version from Proton's latest `cs/v*` tag.
+  Both share `.github/scripts/proton-package.sh` (feed lookups, pack, verify, push).
 - The workflow refuses a tag whose CHANGELOG section is missing or still says `Unreleased`. Replace it with the
   date before tagging.
