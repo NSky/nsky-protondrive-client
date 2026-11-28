@@ -1,3 +1,8 @@
+<p align="center">
+  <img src=".github/social-preview.png" width="800"
+       alt="protondrive: command-line client for Proton Drive, with two-way folder sync">
+</p>
+
 # protondrive-client
 
 Unofficial command-line client for Proton Drive, written in C# on top of the
